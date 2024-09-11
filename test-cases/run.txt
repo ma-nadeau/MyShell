@@ -1,0 +1,4 @@
+set a good
+print a
+run ../testcases/assignment1/set.txt
+quit
