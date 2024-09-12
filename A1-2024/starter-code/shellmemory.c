@@ -1,7 +1,8 @@
+#include "shellmemory.h"
+
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include "shellmemory.h"
 
 struct memory_struct {
     char *var;
@@ -18,15 +19,17 @@ int match(char *model, char *var) {
     }
     if (matchCount == len) {
         return 1;
-    } else return 0;
+    } else {
+        return 0;
+    }
 }
 
 // Shell memory functions
 
-void mem_init(){
+void mem_init() {
     int i;
-    for (i = 0; i < MEM_SIZE; i++){		
-        shellmemory[i].var   = "none";
+    for (i = 0; i < MEM_SIZE; i++) {
+        shellmemory[i].var = "none";
         shellmemory[i].value = "none";
     }
 }
@@ -35,33 +38,33 @@ void mem_init(){
 void mem_set_value(char *var_in, char *value_in) {
     int i;
 
-    for (i = 0; i < MEM_SIZE; i++){
-        if (strcmp(shellmemory[i].var, var_in) == 0){
+    for (i = 0; i < MEM_SIZE; i++) {
+        if (strcmp(shellmemory[i].var, var_in) == 0) {
             shellmemory[i].value = strdup(value_in);
             return;
-        } 
+        }
     }
 
-    //Value does not exist, need to find a free spot.
-    for (i = 0; i < MEM_SIZE; i++){
-        if (strcmp(shellmemory[i].var, "none") == 0){
-            shellmemory[i].var   = strdup(var_in);
+    // Value does not exist, need to find a free spot.
+    for (i = 0; i < MEM_SIZE; i++) {
+        if (strcmp(shellmemory[i].var, "none") == 0) {
+            shellmemory[i].var = strdup(var_in);
             shellmemory[i].value = strdup(value_in);
             return;
-        } 
+        }
     }
 
     return;
 }
 
-//get value based on input key
+// get value based on input key
 char *mem_get_value(char *var_in) {
     int i;
 
-    for (i = 0; i < MEM_SIZE; i++){
-        if (strcmp(shellmemory[i].var, var_in) == 0){
+    for (i = 0; i < MEM_SIZE; i++) {
+        if (strcmp(shellmemory[i].var, var_in) == 0) {
             return strdup(shellmemory[i].value);
-        } 
+        }
     }
     return "Variable does not exist";
 }
