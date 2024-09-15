@@ -26,7 +26,7 @@ int badcommandFileDoesNotExist() {
 
 int help();
 int quit();
-int set(char *var, char **values, int number_values);
+int set(char *var, char *values[], int number_values);
 int print(char *var);
 int run(char *script);
 int badcommandFileDoesNotExist();
@@ -57,7 +57,9 @@ int interpreter(char *command_args[], int args_size) {
 
     } else if (strcmp(command_args[0], "set") == 0) {
         // set
-        if (args_size < 3) return badcommand(); // The case where there are too many values is handled for all commands simultaneously above
+        if (args_size < 3) return badcommand();
+        // The case where there are too many values is handled for all commands
+        // simultaneously above
         return set(command_args[1], command_args + 2, args_size - 2);
 
     } else if (strcmp(command_args[0], "print") == 0) {
@@ -102,7 +104,7 @@ int set(char *var, char *values[], int number_values) {
     strcat(buffer, value);
     */
 
-   // Could add input validation here at some point
+    // Could add input validation here at some point
 
     mem_set_value(var, values, number_values);
 
@@ -110,9 +112,9 @@ int set(char *var, char *values[], int number_values) {
 }
 
 int print(char *var) {
-    char *value = mem_get_value(var);
-    printf("%s\n", value);
-    free(value);
+    char buffer[MAX_VARIABLE_VALUE_SIZE];
+    mem_get_value(var, buffer);
+    printf("%s\n", buffer);
     return 0;
 }
 

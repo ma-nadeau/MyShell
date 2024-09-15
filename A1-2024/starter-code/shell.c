@@ -46,10 +46,14 @@ int wordEnding(char c) {
 int parseInput(char inp[]) {
     char tmp[MAX_TOKEN_SIZE], *words[100];
     int ix = 0, w = 0, wordlen, errorCode, token_idx;
-    for (ix = 0; inp[ix] == ' ' && ix < MAX_USER_INPUT; ix++);  // skip white spaces
+
+    // skip white spaces
+    for (ix = 0; inp[ix] == ' ' && ix < MAX_USER_INPUT; ix++);
     while (inp[ix] != '\n' && inp[ix] != '\0' && ix < MAX_USER_INPUT) {
         // extract a word
-        for (wordlen = 0; !wordEnding(inp[ix]) && ix < MAX_USER_INPUT && wordlen < MAX_TOKEN_SIZE - 1; ix++, wordlen++) {
+        for (wordlen = 0; !wordEnding(inp[ix]) && ix < MAX_USER_INPUT &&
+                          wordlen < MAX_TOKEN_SIZE - 1;
+             ix++, wordlen++) {
             tmp[wordlen] = inp[ix];
         }
         tmp[wordlen] = '\0';
@@ -61,9 +65,9 @@ int parseInput(char inp[]) {
     errorCode = interpreter(words, w);
 
     // free allocated memory for input tokens
-    for (token_idx = 0; token_idx < w; token_idx ++){
+    for (token_idx = 0; token_idx < w; token_idx++) {
         free(words[token_idx]);
     }
-    
+
     return errorCode;
 }
