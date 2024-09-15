@@ -5,11 +5,17 @@
 #include "shell.h"
 #include "shellmemory.h"
 
-int MAX_ARGS_SIZE = 3;
+// Max arg size for a single command (name of the command inclusive)
+int MAX_ARGS_SIZE = 7;
 
 int badcommand() {
     printf("Unknown Command\n");
     return 1;
+}
+
+int badcommandTooManyTokens() {
+    printf("Bad command: Too many tokens\n");
+    return 2;
 }
 
 // For run command only
@@ -20,7 +26,7 @@ int badcommandFileDoesNotExist() {
 
 int help();
 int quit();
-int set(char *var, char *value);
+int set(char *var, char **values, int number_values);
 int print(char *var);
 int run(char *script);
 int badcommandFileDoesNotExist();
@@ -29,8 +35,10 @@ int badcommandFileDoesNotExist();
 int interpreter(char *command_args[], int args_size) {
     int i;
 
-    if (args_size < 1 || args_size > MAX_ARGS_SIZE) {
+    if (args_size < 1) {
         return badcommand();
+    } else if (args_size > MAX_ARGS_SIZE) {
+        return badcommandTooManyTokens();
     }
 
     for (i = 0; i < args_size; i++) {  // terminate args at newlines
@@ -49,8 +57,8 @@ int interpreter(char *command_args[], int args_size) {
 
     } else if (strcmp(command_args[0], "set") == 0) {
         // set
-        if (args_size != 3) return badcommand();
-        return set(command_args[1], command_args[2]);
+        if (args_size < 3) return badcommand(); // The case where there are too many values is handled for all commands simultaneously above
+        return set(command_args[1], command_args + 2, args_size - 2);
 
     } else if (strcmp(command_args[0], "print") == 0) {
         if (args_size != 2) return badcommand();
@@ -82,7 +90,7 @@ int quit() {
     exit(0);
 }
 
-int set(char *var, char *value) {
+int set(char *var, char *values[], int number_values) {
     char *link = "=";
 
     /* PART 1: You might want to write code that looks something like this.
@@ -94,13 +102,17 @@ int set(char *var, char *value) {
     strcat(buffer, value);
     */
 
-    mem_set_value(var, value);
+   // Could add input validation here at some point
+
+    mem_set_value(var, values, number_values);
 
     return 0;
 }
 
 int print(char *var) {
-    printf("%s\n", mem_get_value(var));
+    char *value = mem_get_value(var);
+    printf("%s\n", value);
+    free(value);
     return 0;
 }
 

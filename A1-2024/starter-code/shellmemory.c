@@ -6,7 +6,7 @@
 
 struct memory_struct {
     char *var;
-    char *value;
+    char *value[MAX_VALUE_SIZE];
 };
 
 struct memory_struct shellmemory[MEM_SIZE];
@@ -27,44 +27,81 @@ int match(char *model, char *var) {
 // Shell memory functions
 
 void mem_init() {
-    int i;
-    for (i = 0; i < MEM_SIZE; i++) {
-        shellmemory[i].var = "none";
-        shellmemory[i].value = "none";
+    int mem_idx, val_idx;
+    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
+        shellmemory[mem_idx].var = NULL;
+        for (val_idx = 0; val_idx < MAX_VALUE_SIZE; val_idx++) {
+            shellmemory[mem_idx].value[val_idx] = NULL;
+        }
+    }
+}
+
+// clear value of a variable
+void mem_clear_value(int mem_idx) {
+    int val_idx;
+    for (val_idx = 0; val_idx < MAX_VALUE_SIZE; val_idx++) {
+        if (shellmemory[mem_idx].value[val_idx] != NULL) {
+            free(shellmemory[mem_idx].value[val_idx]);
+            shellmemory[mem_idx].value[val_idx] = NULL;
+        } else {    // if array value is NULL then we reached the end of initialized elements
+            return;
+        }
     }
 }
 
 // Set key value pair
-void mem_set_value(char *var_in, char *value_in) {
-    int i;
+void mem_set_value(char *var_in, char *values_in[], int number_values) {
+    int mem_idx, val_idx;
 
-    for (i = 0; i < MEM_SIZE; i++) {
-        if (strcmp(shellmemory[i].var, var_in) == 0) {
-            shellmemory[i].value = strdup(value_in);
+    // If variable exists, we overwrite the values
+    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
+        // Check to see if memory spot was not initialized (in which case we reached the end of initialized variables)
+        // or whether the memory spot corresponds to the variable passed as argument
+        if (shellmemory[mem_idx].var == NULL || strcmp(shellmemory[mem_idx].var, var_in) == 0){
+            if (shellmemory[mem_idx].var == NULL) { // Case where we reached end of known variables
+                // Create our new variable in this spot
+                shellmemory[mem_idx].var = strdup(var_in);
+            } else {    // Case where variable already existed
+                // clear the old values of variable appropriately
+                mem_clear_value(mem_idx);
+            }
+            // In either case we populate the new values
+            for (val_idx = 0; val_idx < number_values; val_idx++) {
+                shellmemory[mem_idx].value[val_idx] = strdup(values_in[val_idx]);
+            }
             return;
         }
     }
 
-    // Value does not exist, need to find a free spot.
-    for (i = 0; i < MEM_SIZE; i++) {
-        if (strcmp(shellmemory[i].var, "none") == 0) {
-            shellmemory[i].var = strdup(var_in);
-            shellmemory[i].value = strdup(value_in);
-            return;
-        }
-    }
-
+    // out of memory here
     return;
 }
 
 // get value based on input key
 char *mem_get_value(char *var_in) {
-    int i;
+    int mem_idx, val_idx;
+    char *unexistentVariableErrorMessage = strdup("Variable does not exist");
+    char *space = " ";
 
-    for (i = 0; i < MEM_SIZE; i++) {
-        if (strcmp(shellmemory[i].var, var_in) == 0) {
-            return strdup(shellmemory[i].value);
+    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
+        // Case where we reached end of initialized memory
+        if (shellmemory[mem_idx].var == NULL) {
+            return unexistentVariableErrorMessage;
+        }
+        if (strcmp(shellmemory[mem_idx].var, var_in) == 0) {
+            // Assemble the values
+            char *buffer = (char *) malloc(MAX_VARIABLE_VALUE_SIZE * sizeof(char));
+            buffer[0] = '\0';   // Initialize buffer with null character
+            val_idx = 0;
+            while (shellmemory[mem_idx].value[val_idx] != NULL) {
+                if (val_idx != 0){
+                    strcat(buffer, space);
+                }
+                strcat(buffer, shellmemory[mem_idx].value[val_idx]);
+                val_idx++;
+            }
+            return buffer;
         }
     }
-    return "Variable does not exist";
+    return unexistentVariableErrorMessage;
 }
