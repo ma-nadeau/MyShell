@@ -29,6 +29,7 @@ int quit();
 int set(char *var, char *values[], int number_values);
 int print(char *var);
 int run(char *script);
+int echo(char *input);
 int badcommandFileDoesNotExist();
 
 // Interpret commands and their arguments
@@ -69,7 +70,9 @@ int interpreter(char *command_args[], int args_size) {
     } else if (strcmp(command_args[0], "run") == 0) {
         if (args_size != 2) return badcommand();
         return run(command_args[1]);
-
+    } else if (strcmp(command_args[0], "echo") == 0) {
+        if (args_size != 2) return badcommand();
+        return echo(command_args[1]);
     } else
         return badcommand();
 }
@@ -116,6 +119,22 @@ int print(char *var) {
     mem_get_value(var, buffer);
     printf("%s\n", buffer);
     return 0;
+}
+
+int echo(char *input) { //TODO: 1 - Can it echo non-alphanumeric? 2- Do I need to check for token size?
+    int errCode = 0;   // No error by default
+    char buffer[MAX_VARIABLE_VALUE_SIZE];  // Buffer to store the variable value
+
+    if (input[0] == '$') {                // Case for variable in memory
+        char *var_name = input + 1;       // Ignore the '$'
+        mem_get_value(var_name, buffer);  // Retrieve variable value into buffer
+        printf("%s\n", buffer);  // Print the value (empty if not found)
+
+    } else {  // Case for displaying string on a new line
+        printf("%s\n", input);
+    }
+
+    return errCode;
 }
 
 int run(char *script) {
