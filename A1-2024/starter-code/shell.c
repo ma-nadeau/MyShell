@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-// #include <unistd.h>
+#include <unistd.h>
+
 #include "interpreter.h"
 #include "shell.h"
 #include "shellmemory.h"
@@ -25,7 +26,15 @@ int main(int argc, char *argv[]) {
     // init shell memory
     mem_init();
     while (1) {
-        printf("%c ", prompt);
+        // In batch mode, check if eof is reached to switch back to interactive mode
+        if (feof(stdin)){
+            freopen("/dev/tty", "r", stdin);
+        }
+
+        // if we the stdin is pointing to terminal only print prompt
+        if (isatty(fileno(stdin))){
+            printf("%c ", prompt);
+        }
         // here you should check the unistd library
         // so that you can find a way to not display $ in the batch mode
         fgets(userInput, MAX_USER_INPUT - 1, stdin);
