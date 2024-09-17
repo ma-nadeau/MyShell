@@ -92,7 +92,7 @@ int convertInputToOneLiners(char input[]) {
 
         errorCode = parseInput(temp);   // Copied from the original code
         if (errorCode == -1) exit(99);  // ignore all other errors
-        start += len + 1;               // Move the pointer to go
+        start += len + 1;               // Move the pointer to go after the ";"
     }
     errorCode = parseInput(start);  // Copied from the original code
     if (errorCode == -1) exit(99);  // ignore all other errors
