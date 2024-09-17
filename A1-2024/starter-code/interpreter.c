@@ -33,6 +33,7 @@ int run(char *script);
 int echo(char *input);
 int badcommandFileDoesNotExist();
 int my_ls(void);
+int my_touch(char *input);
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -78,6 +79,9 @@ int interpreter(char *command_args[], int args_size) {
     } else if (strcmp(command_args[0], "my_ls") == 0) {
         if (args_size != 1) return badcommand();
         return my_ls();
+    } else if (strcmp(command_args[0], "my_touch") == 0) {
+        if (args_size != 2) return badcommand();
+        return my_touch(command_args[1]);
     } else
         return badcommand();
 }
@@ -155,7 +159,8 @@ int alphasort();  // TODO: check why i need to put it here? Otherwise my VSCode
                   // display an error but the code still works
 
 int my_ls(void) {
-    struct dirent **content;
+    struct dirent *
+        *content;  // Pointer to an array of pointer that points to the content
     int n = scandir(".", &content, filterOutParentAndCurrentDirectory,
                     alphasort);  // store in content the list of file/folder
                                  // names in the proper order
@@ -172,7 +177,24 @@ int my_ls(void) {
     return 0;
 }
 
-int my_touch(void) {}
+int my_touch(char *input) {
+    FILE *f;
+
+    // TODO: verify if that's the desired behaviour
+    f = fopen(input, "r");  // Check if a file with this name already exists
+    if (f != NULL) {
+        fclose(f);  // Closing the exisiting file
+        return 1;   // Error - Cannot override existing file
+    }
+
+    f = fopen(input, "w");  // Create an empty file with name input
+    if (f == NULL) {
+        return 2;  // Error while creating the file
+    }
+    
+    fclose(f);  // Closing the empty file
+    return 0;
+}
 
 int run(char *script) {
     int errCode = 0;
