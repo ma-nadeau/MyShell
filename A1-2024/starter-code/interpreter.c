@@ -27,10 +27,16 @@ int badcommandFileDoesNotExist() {
     return 3;
 }
 
-// For mkdir command only
+// For my_mkdir command only
 int badcommandMy_mkdir() {
     printf("Bad command: my_mkdir\n");
     return 4;
+}
+
+// For my_cd command only
+int badcommandMy_cd() {
+    printf("Bad command: my_cd\n");
+    return 5;
 }
 
 int help();
@@ -43,6 +49,7 @@ int badcommandFileDoesNotExist();
 int my_ls(void);
 int my_touch(char *input);
 int my_mkdir(char *input);
+int my_cd(char *input);
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -94,6 +101,9 @@ int interpreter(char *command_args[], int args_size) {
     } else if (strcmp(command_args[0], "my_mkdir") == 0) {
         if (args_size != 2) return badcommand();
         return my_mkdir(command_args[1]);
+    } else if (strcmp(command_args[0], "my_cd") == 0) {
+        if (args_size != 2) return badcommand();
+        return my_cd(command_args[1]);
     } else
         return badcommand();
 }
@@ -179,7 +189,7 @@ int my_ls(void) {
     int n =
         scandir(".", &content, filterOutParentAndCurrentDirectory, alphasort);
     if (n < 0)
-        return 5;
+        return 6;
     else {
         for (int i = 0; i < n; i++) {
             // Print each file/directory name
@@ -199,7 +209,7 @@ int my_touch(char *input) {
         // Create an empty file with name input
         f = fopen(input, "w");
         if (f == NULL) {
-            return 6;  // Error while creating the file
+            return 7;  // Error while creating the file
         }
 
         fclose(f);  // Closing the empty file
@@ -223,6 +233,17 @@ int my_mkdir(char *input) {
         }
     } else {  // Case where dirname is not a variable
         mkdir(input, 0777);
+    }
+
+    return errCode;
+}
+
+int my_cd(char *input) {
+    int errCode = 0;                       // No error by default
+
+    // attempt to chdir
+    if (chdir(input) != 0){
+        errCode = badcommandMy_cd();
     }
 
     return errCode;
