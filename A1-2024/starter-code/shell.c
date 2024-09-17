@@ -79,18 +79,24 @@ int convertInputToOneLiners(char input[]) {
     }
     int ix = 0;
     int prev_index = 0;
-
+    // strcspn(start, ";") will output length of the string if it doesn't find
+    // ";"
     while (strcspn(start, ";") < strlen(start)) {
+        int len = strcspn(start, ";");
+        // Temporary place to store the command to be called
         char temp[MAX_USER_INPUT + 1];
-        strncpy(temp, start, strcspn(start, ";"));
-        temp[strcspn(start, ";")] = '\0';  // Null-terminate the substring
-        errorCode = parseInput(temp);
+        // Store in temp the string from thepointer start to the index of 1st
+        // ";"
+        strncpy(temp, start, len);
+        temp[len] = '\0';  // Null-terminate the substring
+
+        errorCode = parseInput(temp);   // Copied from the original code
         if (errorCode == -1) exit(99);  // ignore all other errors
-        start += strcspn(start, ";") + 1;
+        start += len + 1;               // Move the pointer to go
     }
-    errorCode = parseInput(start);
+    errorCode = parseInput(start);  // Copied from the original code
     if (errorCode == -1) exit(99);  // ignore all other errors
-    return 0;
+    return errorCode;
 }
 
 int parseInput(char inp[]) {
