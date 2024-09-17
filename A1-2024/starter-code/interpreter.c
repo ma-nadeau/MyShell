@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,6 +32,7 @@ int print(char *var);
 int run(char *script);
 int echo(char *input);
 int badcommandFileDoesNotExist();
+int my_ls(void);
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -73,6 +75,9 @@ int interpreter(char *command_args[], int args_size) {
     } else if (strcmp(command_args[0], "echo") == 0) {
         if (args_size != 2) return badcommand();
         return echo(command_args[1]);
+    } else if (strcmp(command_args[0], "my_ls") == 0) {
+        if (args_size != 1) return badcommand();
+        return my_ls();
     } else
         return badcommand();
 }
@@ -121,8 +126,9 @@ int print(char *var) {
     return 0;
 }
 
-int echo(char *input) { //TODO: 1 - Can it echo non-alphanumeric? 2- Do I need to check for token size?
-    int errCode = 0;   // No error by default
+int echo(char *input) {  // TODO: 1 - Can it echo non-alphanumeric? 2- Do I need
+                         // to check for token size?
+    int errCode = 0;     // No error by default
     char buffer[MAX_VARIABLE_VALUE_SIZE];  // Buffer to store the variable value
 
     if (input[0] == '$') {                // Case for variable in memory
@@ -135,6 +141,20 @@ int echo(char *input) { //TODO: 1 - Can it echo non-alphanumeric? 2- Do I need t
     }
 
     return errCode;
+}
+
+
+int my_ls(void) { // TODO: doesn't list them in the proper order just yet
+    DIR *directory = opendir(".");  // Open current directory
+    struct dirent *entry;
+    // Display the the names of the files/repo inside the current repo (not in the right order)
+    while ((entry = readdir(directory)) != NULL) {
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+            printf("%s\n", entry->d_name);
+        }
+    }
+    closedir(directory);
+    return 0;
 }
 
 int run(char *script) {
