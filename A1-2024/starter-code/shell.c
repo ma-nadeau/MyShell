@@ -77,8 +77,6 @@ int convertInputToOneLiners(char input[]) {
     if (count > 9) {
         return 2;  // Error, more than 10 command
     }
-    int ix = 0;
-    int prev_index = 0;
     // strcspn(start, ";") will output length of the string if it doesn't find
     // ";"
     while (strcspn(start, ";") < strlen(start)) {
