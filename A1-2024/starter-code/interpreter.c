@@ -143,19 +143,36 @@ int echo(char *input) {  // TODO: 1 - Can it echo non-alphanumeric? 2- Do I need
     return errCode;
 }
 
+int filterOutParentAndCurrentDirectory(const struct dirent *entry) {
+    // Skip Over: "." -> Current Directory & ".." -> Parent Directory
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+        return 0;  // False (i.e. Ingnore this one)
+    }
+    return 1;  // True  (i.e Don't Ignore)
+}
 
-int my_ls(void) { // TODO: doesn't list them in the proper order just yet
-    DIR *directory = opendir(".");  // Open current directory
-    struct dirent *entry;
-    // Display the the names of the files/repo inside the current repo (not in the right order)
-    while ((entry = readdir(directory)) != NULL) {
-        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
-            printf("%s\n", entry->d_name);
+int alphasort();  // TODO: check why i need to put it here? Otherwise my VSCode
+                  // display an error but the code still works
+
+int my_ls(void) {
+    struct dirent **content;
+    int n = scandir(".", &content, filterOutParentAndCurrentDirectory,
+                    alphasort);  // store in content the list of file/folder
+                                 // names in the proper order
+    if (n < 0)
+        perror("scandir");
+    else {
+        for (int i = 0; i < n; i++) {
+            printf("%s\n",
+                   content[i]->d_name);  // Print each file/directory name
+            free(content[i]);            // Free allocated memory for each entry
         }
     }
-    closedir(directory);
+    free(content);  // Free the array of directory entries
     return 0;
 }
+
+int my_touch(void) {}
 
 int run(char *script) {
     int errCode = 0;
