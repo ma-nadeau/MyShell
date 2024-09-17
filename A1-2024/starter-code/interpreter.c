@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "shell.h"
 #include "shellmemory.h"
@@ -138,7 +139,11 @@ int echo(char *input) {  // TODO: 1 - Can it echo non-alphanumeric? 2- Do I need
     if (input[0] == '$') {                // Case for variable in memory
         char *var_name = input + 1;       // Ignore the '$'
         mem_get_value(var_name, buffer);  // Retrieve variable value into buffer
-        printf("%s\n", buffer);  // Print the value (empty if not found)
+        if (strcmp(buffer, "Variable does not exist") != 0) {
+            printf("%s\n", buffer);  // Print the value (empty if not found)
+        } else {
+            printf("\n");
+        }
 
     } else {  // Case for displaying string on a new line
         printf("%s\n", input);
@@ -155,22 +160,20 @@ int filterOutParentAndCurrentDirectory(const struct dirent *entry) {
     return 1;  // True  (i.e Don't Ignore)
 }
 
-int alphasort();  // TODO: check why i need to put it here? Otherwise my VSCode
-                  // display an error but the code still works
-
 int my_ls(void) {
-    struct dirent *
-        *content;  // Pointer to an array of pointer that points to the content
-    int n = scandir(".", &content, filterOutParentAndCurrentDirectory,
-                    alphasort);  // store in content the list of file/folder
-                                 // names in the proper order
+    // Pointer to an array of pointer that points to the content
+    struct dirent **content;
+
+    // store in content the list of file/folder names in the proper order
+    int n =
+        scandir(".", &content, filterOutParentAndCurrentDirectory, alphasort);
     if (n < 0)
-        perror("scandir");
+        return 4;
     else {
         for (int i = 0; i < n; i++) {
-            printf("%s\n",
-                   content[i]->d_name);  // Print each file/directory name
-            free(content[i]);            // Free allocated memory for each entry
+            // Print each file/directory name
+            printf("%s\n", content[i]->d_name);
+            free(content[i]);  // Free allocated memory for each entry
         }
     }
     free(content);  // Free the array of directory entries
@@ -180,19 +183,17 @@ int my_ls(void) {
 int my_touch(char *input) {
     FILE *f;
 
-    // TODO: verify if that's the desired behaviour
-    f = fopen(input, "r");  // Check if a file with this name already exists
-    if (f != NULL) {
-        fclose(f);  // Closing the exisiting file
-        return 1;   // Error - Cannot override existing file
+    // Check if the file exists
+    if (access(input, F_OK) != 0) {
+        // Create an empty file with name input
+        f = fopen(input, "w");
+        if (f == NULL) {
+            return 5;  // Error while creating the file
+        }
+
+        fclose(f);  // Closing the empty file
     }
 
-    f = fopen(input, "w");  // Create an empty file with name input
-    if (f == NULL) {
-        return 2;  // Error while creating the file
-    }
-    
-    fclose(f);  // Closing the empty file
     return 0;
 }
 
