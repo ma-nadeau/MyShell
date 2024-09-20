@@ -69,6 +69,7 @@ int convertInputToOneLiners(char input[]) {
     int count;
     char *start = input;
     int errorCode = 0;  // zero means no error, default
+    int tokenCommandLen, inputRemainingLen;
 
     if (strlen(input) > MAX_USER_INPUT) {
         return 1;  // Error, more than 1000 char
@@ -79,21 +80,20 @@ int convertInputToOneLiners(char input[]) {
     }
     // strcspn(start, ";") will output length of the string if it doesn't find
     // ";"
-    while (strcspn(start, ";") < strlen(start)) {
-        int len = strcspn(start, ";");
+    do {
+        tokenCommandLen = strcspn(start, ";");
+        inputRemainingLen = strlen(start);
         // Temporary place to store the command to be called
         char temp[MAX_USER_INPUT + 1];
         // Store in temp the string from thepointer start to the index of 1st
         // ";"
-        strncpy(temp, start, len);
-        temp[len] = '\0';  // Null-terminate the substring
+        strncpy(temp, start, tokenCommandLen);
+        temp[tokenCommandLen] = '\0';  // Null-terminate the substring
 
         errorCode = parseInput(temp);   // Copied from the original code
         if (errorCode == -1) exit(99);  // ignore all other errors
-        start += len + 1;               // Move the pointer to go after the ";"
-    }
-    errorCode = parseInput(start);  // Copied from the original code
-    if (errorCode == -1) exit(99);  // ignore all other errors
+        start += tokenCommandLen + 1;   // Move the pointer to go after the ";"
+    } while (tokenCommandLen < inputRemainingLen);
     return errorCode;
 }
 

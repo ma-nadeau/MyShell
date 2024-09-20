@@ -239,10 +239,10 @@ int my_mkdir(char *input) {
 }
 
 int my_cd(char *input) {
-    int errCode = 0;                       // No error by default
+    int errCode = 0;  // No error by default
 
     // attempt to chdir
-    if (chdir(input) != 0){
+    if (chdir(input) != 0) {
         errCode = badcommandMy_cd();
     }
 
@@ -260,7 +260,7 @@ int run(char *script) {
 
     fgets(line, MAX_USER_INPUT - 1, p);
     while (1) {
-        errCode = parseInput(line);  // which calls interpreter()
+        errCode = convertInputToOneLiners(line);  // which calls interpreter()
         memset(line, 0, sizeof(line));
 
         if (feof(p)) {
