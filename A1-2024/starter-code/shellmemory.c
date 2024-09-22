@@ -80,6 +80,22 @@ void mem_set_value(char *var_in, char *values_in[], int number_values) {
     return;
 }
 
+// get variable entry index in memory
+int mem_get_variable_index(char *var_in) {
+    int mem_idx, val_idx;
+
+    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
+        // Case where we reached end of initialized memory
+        if (shellmemory[mem_idx].var == NULL) {
+            return -1;
+        }
+        if (strcmp(shellmemory[mem_idx].var, var_in) == 0) {
+            return mem_idx;
+        }
+    }
+    return -1;
+}
+
 // get value based on input key
 void mem_get_value(char *var_in, char *buffer) {
     int mem_idx, val_idx;
@@ -88,24 +104,19 @@ void mem_get_value(char *var_in, char *buffer) {
     // Assume there is an error
     strcpy(buffer, "Variable does not exist");
 
-    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
-        // Case where we reached end of initialized memory
-        if (shellmemory[mem_idx].var == NULL) {
-            return;
-        }
-        if (strcmp(shellmemory[mem_idx].var, var_in) == 0) {
-            // Assemble the values
-            buffer[0] = '\0';  // Initialize buffer with null character
-            val_idx = 0;
-            while (val_idx < MAX_VALUE_SIZE && shellmemory[mem_idx].value[val_idx] != NULL) {
-                if (val_idx != 0) {
-                    strcat(buffer, space);
-                }
-                strcat(buffer, shellmemory[mem_idx].value[val_idx]);
-                val_idx++;
+    mem_idx = mem_get_variable_index(var_in);
+    if (mem_idx > -1) {
+        // Assemble the values
+        buffer[0] = '\0';  // Initialize buffer with null character
+        val_idx = 0;
+        while (val_idx < MAX_VALUE_SIZE && shellmemory[mem_idx].value[val_idx] != NULL) {
+            if (val_idx != 0) {
+                strcat(buffer, space);
             }
-            return;
+            strcat(buffer, shellmemory[mem_idx].value[val_idx]);
+            val_idx++;
         }
+        return;
     }
     return;
 }

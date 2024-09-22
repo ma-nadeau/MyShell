@@ -160,7 +160,7 @@ int echo(char *input) {  // TODO: 1 - Can it echo non-alphanumeric? 2- Do I need
     if (input[0] == '$') {                // Case for variable in memory
         char *var_name = input + 1;       // Ignore the '$'
         mem_get_value(var_name, buffer);  // Retrieve variable value into buffer
-        if (strcmp(buffer, "Variable does not exist") != 0) {
+        if (strcmp(buffer, "Variable does not exist") != 0 || mem_get_variable_index(var_name) > -1) {
             printf("%s\n", buffer);  // Print the value (empty if not found)
         } else {
             printf("\n");
