@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #include "shell.h"
 #include "shellmemory.h"
@@ -176,10 +177,54 @@ int echo(char *input) {  // TODO: 1 - Can it echo non-alphanumeric? 2- Do I need
 int filterOutParentAndCurrentDirectory(const struct dirent *entry) {
     // Skip Over: "." -> Current Directory & ".." -> Parent Directory
     if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-        return 0;  // False (i.e. Ingnore this one)
+        return 0;  // False (i.e. Ignore this one)
     }
     return 1;  // True  (i.e Don't Ignore)
 }
+
+int custom_sort(const struct dirent **d1, const struct dirent **d2){
+    // Store name to compare in name1 and name2
+    const char *name1 = (*d1)->d_name;
+    const char *name2 = (*d2)->d_name;
+    
+    // Case when one starts with a [0-9] and the other with [A-Za-z]
+    if (isdigit(name1[0]) && isalpha(name2[0])) {
+        return -1; // name1 before name2
+    } else if (isalpha(name1[0]) && isdigit(name2[0])) {
+        return 1; // name2 before name1
+    }
+
+    // Case when both start with same type (i.e. int or letters)
+    int i = 0;
+    while (name1[i] != '\0' && name2[i] != '\0') {
+        // ith char are different
+        if (tolower(name1[i]) != tolower(name2[i])) {
+            if (tolower(name1[i]) < tolower(name2[i])){
+                return -1; // name1 before name2
+            } else {
+                return 1; // name2 before name1
+            }
+        }
+        // ith char are different
+        if (name1[i] != name2[i]) {
+            if (name1[i] < name2[i]){
+                return -1; // name1 before name2
+            } else {
+                return 1; // name2 before name1
+            }
+        }
+        i++;
+    }
+
+    // Case when two string have the same beginning, but different ending (e.g. shell.c and shellmemory.c)
+    if (name1[i] == '\0') {
+        return -1; // name1 is shorter, should come first
+    } else if (name2[i] == '\0') {
+        return 1; // name2 is shorter, should come first
+    }
+    return 0; // When names are identical
+    }
+
 
 int my_ls(void) {
     // Pointer to an array of pointer that points to the content
@@ -187,7 +232,7 @@ int my_ls(void) {
 
     // store in content the list of file/folder names in the proper order
     int n =
-        scandir(".", &content, filterOutParentAndCurrentDirectory, alphasort);
+        scandir(".", &content, filterOutParentAndCurrentDirectory, custom_sort);
     if (n < 0)
         return 6;
     else {
