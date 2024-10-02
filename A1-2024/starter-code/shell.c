@@ -50,11 +50,14 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+/*** Parsing Functions ***/
+
 int wordEnding(char c) {
     // You may want to add ';' to this at some point,
     // or you may want to find a different way to implement chains.
     return c == '\0' || c == '\n' || c == ' ';
 }
+
 int countChar(char input[], char search) {
     int count = 0;
     for (int i = 0; input[i] != '\0'; i++) {
@@ -85,7 +88,7 @@ int convertInputToOneLiners(char input[]) {
         inputRemainingLen = strlen(start);
         // Temporary place to store the command to be called
         char temp[MAX_USER_INPUT + 1];
-        // Store in temp the string from thepointer start to the index of 1st
+        // Store in temp the string from the pointer start to the index of 1st
         // ";"
         strncpy(temp, start, tokenCommandLen);
         temp[tokenCommandLen] = '\0';  // Null-terminate the substring
