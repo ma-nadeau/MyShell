@@ -1,4 +1,5 @@
 #include "shellmemory.h"
+#include "shell.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,7 +10,29 @@ struct memory_struct {
     char *value[MAX_VALUE_SIZE];
 };
 
+struct PCB {
+    int pid;
+    int memoryStartIdx;
+    int lengthCode;
+    int programCounter;
+    struct PCB *next;
+};
+
+struct PCBQueue {
+    struct PCB *head;
+    struct PCB *tail;
+} readyQueue;
+
+struct availableMemory {
+    int memoryStartIdx;
+    int length;
+    struct availableMemory *next;
+    struct availableMemory *prev;
+};
+
 struct memory_struct shellmemory[MEM_SIZE];
+char *shellmemoryCode[MEM_SIZE];
+struct availableMemory *availableMemoryHead;
 
 // Helper functions
 int match(char *model, char *var) {
@@ -27,13 +50,26 @@ int match(char *model, char *var) {
 // Shell memory functions
 
 void mem_init() {
+    // Initialize variable and code shellmemory
     int mem_idx, val_idx;
     for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
         shellmemory[mem_idx].var = NULL;
+        shellmemoryCode[mem_idx] = NULL;
         for (val_idx = 0; val_idx < MAX_VALUE_SIZE; val_idx++) {
             shellmemory[mem_idx].value[val_idx] = NULL;
         }
     }
+
+    // Initialize readyQueue
+    readyQueue.head = NULL;
+    readyQueue.tail = NULL;
+
+    // Initialize available memory
+    availableMemoryHead = (struct availableMemory *) malloc(sizeof(struct availableMemory));
+    availableMemoryHead->memoryStartIdx = 0;
+    availableMemoryHead->length = MEM_SIZE;
+    availableMemoryHead->next = NULL;
+    availableMemoryHead->prev = NULL;
 }
 
 // clear value of a variable
@@ -119,4 +155,159 @@ void mem_get_value(char *var_in, char *buffer) {
         return;
     }
     return;
+}
+
+int codeLength(char *script){
+    FILE *p = fopen(script, "rt");  // the program is in a file
+    int count = 0;
+    char c;
+
+    if (p == NULL) {
+        return -1;
+    }
+
+    do{
+        c = getc(p);
+        if (c == '\n'){
+            count++;
+        }
+    } while (c != EOF);
+
+    fclose(p);
+}
+
+int allocateMemoryScript(int scriptLength) {
+    int tmp;
+    // Fetch available memory list head
+    struct availableMemory *blockPointer = availableMemoryHead;
+    // Loop over available memory to find enough space
+    while(blockPointer){
+        // Enough space found
+        if (blockPointer->length >= scriptLength){
+            // Update the available memory block
+            tmp = blockPointer->memoryStartIdx;
+            blockPointer->memoryStartIdx += scriptLength;
+            blockPointer->length -= scriptLength;
+            // Check if the block is now empty
+            if (blockPointer->length == 0 && blockPointer != availableMemoryHead) {
+                blockPointer->prev->next = blockPointer->next;
+                free(blockPointer);
+            }
+            return tmp;
+        }
+    }
+
+    //If we end up here it means that no memory was available for the script
+    return -1;
+}
+
+void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
+    struct availableMemory *currentMemoryBlock = availableMemoryHead;
+
+    while(currentMemoryBlock) {
+        if (memoryStartIdx < currentMemoryBlock->memoryStartIdx){
+            // Check to see if the memory freed is contiguous with the memory afterwards
+            if (memoryStartIdx + lengthCode == currentMemoryBlock->memoryStartIdx) {
+                currentMemoryBlock->memoryStartIdx -= lengthCode;
+                currentMemoryBlock->length += lengthCode;
+            } else {
+                struct availableMemory *tmp = (struct availableMemory *) malloc(sizeof(struct availableMemory));
+                tmp->memoryStartIdx = memoryStartIdx;
+                tmp->length = lengthCode;
+                tmp->next = currentMemoryBlock;
+                tmp->prev = currentMemoryBlock->prev;
+                currentMemoryBlock->prev = tmp;
+                if (availableMemoryHead == currentMemoryBlock) {
+                    availableMemoryHead = tmp;
+                }
+                currentMemoryBlock = tmp;
+            }
+
+            // Check to see if the memory freed is contiguous with the memory before
+            if (currentMemoryBlock->prev && currentMemoryBlock->prev->memoryStartIdx + currentMemoryBlock->prev->length == currentMemoryBlock->memoryStartIdx) {
+                currentMemoryBlock->prev->memoryStartIdx += lengthCode;
+                currentMemoryBlock->prev->length += lengthCode;
+                currentMemoryBlock->prev->next = currentMemoryBlock->next;
+                free(currentMemoryBlock);
+            }
+            break;
+        }
+        currentMemoryBlock = currentMemoryBlock->next;
+    }
+}
+
+void deallocateMemoryScript(struct PCB *pcb) {
+    int line_idx;
+    
+    // Free the code in shell memory
+    for(line_idx = pcb->memoryStartIdx; line_idx < pcb->memoryStartIdx + pcb->lengthCode; line_idx++){
+        free(shellmemoryCode[line_idx]);
+    }
+    addMemoryAvailability(pcb->memoryStartIdx, pcb->lengthCode);
+    free(pcb);
+}
+
+// Function to load a new script in memory
+int mem_load_script(char *script){
+    char line[MAX_USER_INPUT];
+    int scriptLength = codeLength(script);
+    int line_idx, mem_idx;
+    FILE *p = fopen(script, "rt");  // the program is in a file
+    struct PCB *newPCB;
+    
+    if (p == NULL || scriptLength == -1) {
+        return -1;
+    }
+
+    mem_idx = allocateMemoryScript(scriptLength);
+    
+    for (line_idx = mem_idx; line_idx < mem_idx + scriptLength; line_idx++) {
+        fgets(line, MAX_USER_INPUT - 1, p);
+        shellmemoryCode[line_idx] = strdup(line);
+        memset(line, 0, sizeof(line));
+
+        if (feof(p)) {
+            break;
+        }
+    }
+
+    fclose(p);
+
+    // Initialize new PCB
+    newPCB = (struct PCB *) malloc(sizeof(struct PCB));
+    newPCB->pid = rand();
+    newPCB->memoryStartIdx = mem_idx;
+    newPCB->lengthCode = scriptLength;
+    newPCB->programCounter = mem_idx;
+    newPCB->next = NULL;
+
+    if (readyQueue.tail){
+        readyQueue.tail->next = newPCB;
+    }
+    readyQueue.tail = newPCB;
+    if (!readyQueue.head) {
+        readyQueue.head = readyQueue.tail;
+    }
+
+    return 0;
+}
+
+void schedulerRun(policy_t policy) {
+    struct PCB *currentPCB;
+    int line_idx;
+
+    switch(policy){
+        case FCFS:
+            while(readyQueue.head){
+                currentPCB = readyQueue.head;
+
+                // Execute all lines of code
+                for (line_idx = currentPCB->programCounter; line_idx < currentPCB->memoryStartIdx + currentPCB->lengthCode; line_idx++, currentPCB->programCounter++){
+                    convertInputToOneLiners(shellmemoryCode[line_idx]);
+                }
+
+                readyQueue.head = currentPCB->next;
+                deallocateMemoryScript(currentPCB);
+            }
+    }
 }

@@ -14,7 +14,7 @@ int convertInputToOneLiners(char input[]);
 // Start of everything
 int main(int argc, char *argv[]) {
     printf("Shell version 1.3 created September 2024\n");
-    help();
+    // help();  //Not printing the help text anymore at start of shell
 
     char prompt = '$';               // Shell prompt
     char userInput[MAX_USER_INPUT];  // user's input stored here

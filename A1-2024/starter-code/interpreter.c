@@ -291,26 +291,10 @@ int my_cd(char *input) {
 
 int run(char *script) {
     int errCode = 0;
-    char line[MAX_USER_INPUT];
-    FILE *p = fopen(script, "rt");  // the program is in a file
-
-    if (p == NULL) {
-        return badcommand(COMMAND_ERROR_FILE_INEXISTENT);
+    errCode = mem_load_script(script);
+    if (!errCode) {
+        schedulerRun(FCFS);
     }
-
-    fgets(line, MAX_USER_INPUT - 1, p);
-    while (1) {
-        errCode = convertInputToOneLiners(line);  // which calls interpreter()
-        memset(line, 0, sizeof(line));
-
-        if (feof(p)) {
-            break;
-        }
-        fgets(line, MAX_USER_INPUT - 1, p);
-    }
-
-    fclose(p);
-
     return errCode;
 }
 
