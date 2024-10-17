@@ -311,29 +311,42 @@ int mem_load_script(char *script) {
 
 void switchPCBs(struct PCB *p1, struct PCB *p2) {
     struct PCB *tmp;
-    // Updating nodes around p1
-    if (p1->prev && p1->prev != p2) {
-        p1->prev->next = p2;
-    }
-    if (p1->next && p1->next != p2) {
-        p1->next->prev = p2;
-    }
-    // Updating nodes around p2
-    if (p2->prev && p2->prev != p1) {
-        p2->prev->next = p1;
-    }
-    if (p2->next && p2->next != p1) {
-        p2->next->prev = p1;
-    }
-    // Updating next att for p1 and p2
-    tmp = p2->next;
-    p2->next = p1->next;
-    p1->next = tmp;
-    // Updating prev att for p1 and p2
-    tmp = p2->prev;
-    p2->prev = p1->prev;
-    p1->prev = tmp;
+    if (p1->next == p2) {
+        p1->next = p2->next;
+        if (p2->next) {
+            p2->next->prev = p1;
+        }
+        p2->prev = p1->prev;
+        if (p1->prev) {
+            p1->prev->next = p2;
+        }
+        p2->next = p1;
+        p1->prev = p2;
 
+    } else {
+        // Updating nodes around p1
+        if (p1->prev && p1->prev != p2) {
+            p1->prev->next = p2;
+        }
+        if (p1->next && p1->next != p2) {
+            p1->next->prev = p2;
+        }
+        // Updating nodes around p2
+        if (p2->prev && p2->prev != p1) {
+            p2->prev->next = p1;
+        }
+        if (p2->next && p2->next != p1) {
+            p2->next->prev = p1;
+        }
+        // Updating next att for p1 and p2
+        tmp = p2->next;
+        p2->next = p1->next;
+        p1->next = tmp;
+        // Updating prev att for p1 and p2
+        tmp = p2->prev;
+        p2->prev = p1->prev;
+        p1->prev = tmp;
+    }
     // Update head
     if (p1 == readyQueue.head) {
         readyQueue.head = p2;
@@ -358,7 +371,9 @@ void executeReadyQueuePCBs() {
         currentPCB = readyQueue.head;
 
         readyQueue.head = currentPCB->next;
-        readyQueue.head->prev = NULL;
+        if (readyQueue.head) {
+            readyQueue.head->prev = NULL;
+        }
         // Execute all lines of code
         for (line_idx = currentPCB->programCounter;
              line_idx < currentPCB->memoryStartIdx + currentPCB->lengthCode;
@@ -379,6 +394,7 @@ void schedulerRun(policy_t policy) {
             executeReadyQueuePCBs();
             break;
         case SJF:
+
             smallest = readyQueue.head;
             currentPCB = readyQueue.head->next;
             // Here we are simply comparing the head with the other values, and
@@ -414,7 +430,9 @@ void schedulerRun(policy_t policy) {
                     convertInputToOneLiners(shellmemoryCode[line_idx]);
                 }
                 // Switch processes around
-                readyQueue.head->next->prev = NULL;
+                if (readyQueue.head->next) {  
+                    readyQueue.head->next->prev = NULL;
+                }
                 readyQueue.head = readyQueue.head->next;
                 // Check if process has finished running
                 if (currentPCB->programCounter ==
