@@ -44,7 +44,7 @@ int badcommand(commandError_t errorCode) {
             break;
     }
 
-    return (int) errorCode;
+    return (int)errorCode;
 }
 
 /*** Function signatures ***/
@@ -63,6 +63,8 @@ int is_alphanumeric(char *str);
 int filterOutParentAndCurrentDirectory(const struct dirent *entry);
 int custom_sort(const struct dirent **d1, const struct dirent **d2);
 int is_alphanumeric_list(char **lst, int len_lst);
+policy_t policy_parser(char policy_str[]);
+int exec(char *scripts[], int scripts_number, policy_t policy);
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -123,6 +125,13 @@ int interpreter(char *command_args[], int args_size) {
         if (args_size != 2) return badcommand(COMMAND_ERROR_BAD_COMMAND);
         return my_cd(command_args[1]);
 
+    } else if (strcmp(command_args[0], "exec") == 0) {
+        policy_t policy = policy_parser(command_args[args_size - 1]);
+        if (args_size < 3 || args_size > 5 || policy == INVALID_POLICY)
+            return badcommand(COMMAND_ERROR_BAD_COMMAND);
+
+        return exec(command_args + 1, args_size - 2, policy);
+
     } else {
         return badcommand(COMMAND_ERROR_BAD_COMMAND);
     }
@@ -160,7 +169,8 @@ int set(char *var, char *values[], int number_values) {
 
     // Input validation
     if (!is_alphanumeric(var) || !is_alphanumeric_list(values, number_values)) {
-        return badcommand(COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
+        return badcommand(
+            COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
     }
 
     mem_set_value(var, values, number_values);
@@ -183,7 +193,8 @@ int echo(char *input) {
 
         // Input validation
         if (!is_alphanumeric(var_name)) {
-            return badcommand(COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
+            return badcommand(
+                COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
         }
         mem_get_value(var_name, buffer);  // Retrieve variable value into buffer
         if (strcmp(buffer, "Variable does not exist") != 0 ||
@@ -196,7 +207,8 @@ int echo(char *input) {
     } else {  // Case for displaying string on a new line
         // Input validation
         if (!is_alphanumeric(input)) {
-            return badcommand(COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
+            return badcommand(
+                COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
         }
         printf("%s\n", input);
     }
@@ -229,7 +241,8 @@ int my_touch(char *input) {
 
     // Input validation
     if (!is_alphanumeric(input)) {
-        return badcommand(COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
+        return badcommand(
+            COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
     }
 
     // Check if the file exists
@@ -237,7 +250,8 @@ int my_touch(char *input) {
         // Create an empty file with name input
         f = fopen(input, "w");
         if (f == NULL) {
-            return badcommand(COMMAND_ERROR_FILE_OPEN);  // Error while creating the file
+            return badcommand(
+                COMMAND_ERROR_FILE_OPEN);  // Error while creating the file
         }
 
         fclose(f);  // Closing the empty file
@@ -254,7 +268,8 @@ int my_mkdir(char *input) {
 
         // Input validation
         if (!is_alphanumeric(var_name)) {
-            return badcommand(COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
+            return badcommand(
+                COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
         }
         mem_get_value(var_name, buffer);  // Retrieve variable value into buffer
         if (strcmp(buffer, "Variable does not exist") != 0 &&
@@ -266,7 +281,8 @@ int my_mkdir(char *input) {
     } else {  // Case where dirname is not a variable
         // Input validation
         if (!is_alphanumeric(input)) {
-            return badcommand(COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
+            return badcommand(
+                COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
         }
         mkdir(input, 0777);
     }
@@ -275,10 +291,10 @@ int my_mkdir(char *input) {
 }
 
 int my_cd(char *input) {
-
     // Input validation
     if (!is_alphanumeric(input)) {
-        return badcommand(COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
+        return badcommand(
+            COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
     } else {
         // attempt to chdir
         if (chdir(input) != 0) {
@@ -294,10 +310,37 @@ int run(char *script) {
     errCode = mem_load_script(script);
     if (!errCode) {
         schedulerRun(FCFS);
-    } else if(errCode == -1) {
-        errCode =  badcommand(COMMAND_ERROR_FILE_INEXISTENT);
+    } else if (errCode == -1) {
+        errCode = badcommand(COMMAND_ERROR_FILE_INEXISTENT);
     }
     return errCode;
+}
+
+int exec(char *scripts[], int scripts_number, policy_t policy) {
+    int script_idx;
+    int errCode = 0;
+
+    // Making sure that script filenames are different
+    if (scripts_number > 1) {
+        if (strcmp(scripts[0], scripts[1]) == 0) {
+            return badcommand(COMMAND_ERROR_BAD_COMMAND);
+        }
+        if (scripts_number == 3) {
+            if ((strcmp(scripts[0], scripts[2]) == 0) ||
+                (strcmp(scripts[1], scripts[2]) == 0)) {
+                return badcommand(COMMAND_ERROR_BAD_COMMAND);
+            }
+        }
+    }
+
+    // Loading scripts into memory and checking for any errors
+    for (script_idx = 0; script_idx < scripts_number; script_idx++) {
+        if (mem_load_script(scripts[script_idx])) {
+            return badcommand(COMMAND_ERROR_BAD_COMMAND);
+        }
+    }
+
+    schedulerRun(policy);
 }
 
 /*** HELPER FUNCTIONS ***/
@@ -382,4 +425,19 @@ int custom_sort(const struct dirent **d1, const struct dirent **d2) {
         return 1;  // name2 is shorter, should come first
     }
     return 0;  // When names are identical
+}
+
+policy_t policy_parser(char policy_str[]) {
+    // Checking if policy is available
+    if (strcmp(policy_str, "FCFS") == 0) {
+        return FCFS;
+    } else if (strcmp(policy_str, "SJF") == 0) {
+        return SJF;
+    } else if (strcmp(policy_str, "RR") == 0) {
+        return RR;
+    } else if (strcmp(policy_str, "AGING") == 0) {
+        return AGING;
+    } else {
+        return INVALID_POLICY;
+    }
 }

@@ -17,6 +17,7 @@ struct PCB {
     int lengthCode;
     int programCounter;
     struct PCB *next;
+    struct PCB *prev;
 };
 
 struct PCBQueue {
@@ -168,7 +169,7 @@ int codeLength(char *script) {
     if (p == NULL) {
         return -1;
     }
-    
+
     do {
         c = getc(p);
         if (c == '\n') {
@@ -297,34 +298,134 @@ int mem_load_script(char *script) {
 
     if (readyQueue.tail) {
         readyQueue.tail->next = newPCB;
+        newPCB->prev = readyQueue.tail;
     }
     readyQueue.tail = newPCB;
     if (!readyQueue.head) {
         readyQueue.head = readyQueue.tail;
+        readyQueue.head->prev = NULL;
     }
 
     return 0;
 }
 
+void switchPCBs(struct PCB *p1, struct PCB *p2) {
+    struct PCB *tmp;
+    // Updating nodes around p1
+    if (p1->prev && p1->prev != p2) {
+        p1->prev->next = p2;
+    }
+    if (p1->next && p1->next != p2) {
+        p1->next->prev = p2;
+    }
+    // Updating nodes around p2
+    if (p2->prev && p2->prev != p1) {
+        p2->prev->next = p1;
+    }
+    if (p2->next && p2->next != p1) {
+        p2->next->prev = p1;
+    }
+    // Updating next att for p1 and p2
+    tmp = p2->next;
+    p2->next = p1->next;
+    p1->next = tmp;
+    // Updating prev att for p1 and p2
+    tmp = p2->prev;
+    p2->prev = p1->prev;
+    p1->prev = tmp;
+
+    // Update head
+    if (p1 == readyQueue.head) {
+        readyQueue.head = p2;
+    }
+    if (p2 == readyQueue.head) {
+        readyQueue.head = p1;
+    }
+    // Update tail
+    if (p1 == readyQueue.tail) {
+        readyQueue.tail = p2;
+    }
+    if (p2 == readyQueue.tail) {
+        readyQueue.tail = p1;
+    }
+}
+
+void executeReadyQueuePCBs() {
+    int line_idx;
+    struct PCB *currentPCB;
+
+    while (readyQueue.head) {
+        currentPCB = readyQueue.head;
+
+        readyQueue.head = currentPCB->next;
+        readyQueue.head->prev = NULL;
+        // Execute all lines of code
+        for (line_idx = currentPCB->programCounter;
+             line_idx < currentPCB->memoryStartIdx + currentPCB->lengthCode;
+             line_idx++, currentPCB->programCounter++) {
+            convertInputToOneLiners(shellmemoryCode[line_idx]);
+        }
+        deallocateMemoryScript(currentPCB);
+    }
+}
+
 void schedulerRun(policy_t policy) {
     struct PCB *currentPCB;
+    struct PCB *smallest;
     int line_idx;
 
     switch (policy) {
         case FCFS:
+            executeReadyQueuePCBs();
+            break;
+        case SJF:
+            smallest = readyQueue.head;
+            currentPCB = readyQueue.head->next;
+            // Here we are simply comparing the head with the other values, and
+            // selecting the one with the smallest number of lines
+            while (currentPCB) {
+                if (currentPCB->lengthCode < smallest->lengthCode) {
+                    smallest = currentPCB;
+                }
+                currentPCB = currentPCB->next;
+            }
+
+            if (smallest != readyQueue.head) {
+                switchPCBs(smallest, readyQueue.head);
+            }
+            if (readyQueue.head->next && readyQueue.head->next->next &&
+                readyQueue.head->next->next->lengthCode <
+                    readyQueue.head->next->lengthCode) {
+                switchPCBs(readyQueue.head->next, readyQueue.head->next->next);
+            }
+
+            executeReadyQueuePCBs();
+            break;
+        case RR:
             while (readyQueue.head) {
                 currentPCB = readyQueue.head;
 
-                // Execute all lines of code
+                // Execute 2 lines of code
                 for (line_idx = currentPCB->programCounter;
                      line_idx <
-                     currentPCB->memoryStartIdx + currentPCB->lengthCode;
+                         currentPCB->memoryStartIdx + currentPCB->lengthCode &&
+                     line_idx < currentPCB->memoryStartIdx + 2;
                      line_idx++, currentPCB->programCounter++) {
                     convertInputToOneLiners(shellmemoryCode[line_idx]);
                 }
-
-                readyQueue.head = currentPCB->next;
-                deallocateMemoryScript(currentPCB);
+                // Switch processes around
+                readyQueue.head->next->prev = NULL;
+                readyQueue.head = readyQueue.head->next;
+                // Check if process has finished running
+                if (currentPCB->programCounter ==
+                    currentPCB->memoryStartIdx + currentPCB->lengthCode) {
+                    deallocateMemoryScript(currentPCB);
+                } else {
+                    currentPCB->prev = readyQueue.tail;
+                    readyQueue.tail->next = currentPCB;
+                    readyQueue.tail = currentPCB;
+                }
             }
+            break;
     }
 }

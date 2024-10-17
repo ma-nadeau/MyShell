@@ -8,7 +8,8 @@ typedef enum policy_t {
     FCFS = 0,
     SJF,
     RR,
-    AGING
+    AGING,
+    INVALID_POLICY
 } policy_t;
 
 void mem_init();
