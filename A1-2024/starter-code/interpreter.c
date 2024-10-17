@@ -294,6 +294,8 @@ int run(char *script) {
     errCode = mem_load_script(script);
     if (!errCode) {
         schedulerRun(FCFS);
+    } else if(errCode == -1) {
+        errCode =  badcommand(COMMAND_ERROR_FILE_INEXISTENT);
     }
     return errCode;
 }
