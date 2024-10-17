@@ -239,8 +239,7 @@ void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
                 currentMemoryBlock->prev->memoryStartIdx +
                         currentMemoryBlock->prev->length ==
                     currentMemoryBlock->memoryStartIdx) {
-                currentMemoryBlock->prev->memoryStartIdx += lengthCode;
-                currentMemoryBlock->prev->length += lengthCode;
+                currentMemoryBlock->prev->length += currentMemoryBlock->length;
                 currentMemoryBlock->prev->next = currentMemoryBlock->next;
                 free(currentMemoryBlock);
             }
@@ -311,54 +310,56 @@ int mem_load_script(char *script) {
 
 void switchPCBs(struct PCB *p1, struct PCB *p2) {
     struct PCB *tmp;
-    if (p1->next == p2) {
-        p1->next = p2->next;
-        if (p2->next) {
-            p2->next->prev = p1;
-        }
-        p2->prev = p1->prev;
-        if (p1->prev) {
-            p1->prev->next = p2;
-        }
-        p2->next = p1;
-        p1->prev = p2;
-
-    } else {
-        // Updating nodes around p1
-        if (p1->prev && p1->prev != p2) {
-            p1->prev->next = p2;
-        }
-        if (p1->next && p1->next != p2) {
-            p1->next->prev = p2;
-        }
-        // Updating nodes around p2
-        if (p2->prev && p2->prev != p1) {
-            p2->prev->next = p1;
-        }
-        if (p2->next && p2->next != p1) {
-            p2->next->prev = p1;
-        }
-        // Updating next att for p1 and p2
-        tmp = p2->next;
-        p2->next = p1->next;
-        p1->next = tmp;
-        // Updating prev att for p1 and p2
-        tmp = p2->prev;
-        p2->prev = p1->prev;
-        p1->prev = tmp;
+    // Updating nodes around p1
+    if (p1->prev && p1->prev != p2) {
+        p1->prev->next = p2;
     }
+    if (p1->next && p1->next != p2) {
+        p1->next->prev = p2;
+    }
+    // Updating nodes around p2
+    if (p2->prev && p2->prev != p1) {
+        p2->prev->next = p1;
+    }
+    if (p2->next && p2->next != p1) {
+        p2->next->prev = p1;
+    }
+
+    // Updating next att for p1 and p2
+    tmp = p2->next;
+    if (p1->next != p2){
+        p2->next = p1->next;
+    } else {
+        p2->next = p1;
+    }
+    if (tmp != p1){
+        p1->next = tmp;
+    } else {
+        p1->next = p2;
+    }
+    // Updating prev att for p1 and p2
+    tmp = p2->prev;
+    if (p1->prev != p2){
+        p2->prev = p1->prev;
+    } else {
+        p2->prev = p1;
+    }
+    if (tmp != p1){
+        p1->prev = tmp;
+    } else {
+        p1->prev = p2;
+    }
+
     // Update head
     if (p1 == readyQueue.head) {
         readyQueue.head = p2;
-    }
-    if (p2 == readyQueue.head) {
+    } else if (p2 == readyQueue.head) {
         readyQueue.head = p1;
     }
     // Update tail
     if (p1 == readyQueue.tail) {
         readyQueue.tail = p2;
-    }
-    if (p2 == readyQueue.tail) {
+    } else if (p2 == readyQueue.tail) {
         readyQueue.tail = p1;
     }
 }
@@ -371,6 +372,9 @@ void executeReadyQueuePCBs() {
         currentPCB = readyQueue.head;
 
         readyQueue.head = currentPCB->next;
+        if (readyQueue.tail == currentPCB){
+            readyQueue.tail = NULL;
+        }
         if (readyQueue.head) {
             readyQueue.head->prev = NULL;
         }
@@ -388,6 +392,7 @@ void schedulerRun(policy_t policy) {
     struct PCB *currentPCB;
     struct PCB *smallest;
     int line_idx;
+    int programCounterTmp;
 
     switch (policy) {
         case FCFS:
@@ -422,10 +427,11 @@ void schedulerRun(policy_t policy) {
                 currentPCB = readyQueue.head;
 
                 // Execute 2 lines of code
+                programCounterTmp = currentPCB->programCounter;
                 for (line_idx = currentPCB->programCounter;
                      line_idx <
                          currentPCB->memoryStartIdx + currentPCB->lengthCode &&
-                     line_idx < currentPCB->memoryStartIdx + 2;
+                     line_idx < programCounterTmp + 2;
                      line_idx++, currentPCB->programCounter++) {
                     convertInputToOneLiners(shellmemoryCode[line_idx]);
                 }
@@ -442,6 +448,7 @@ void schedulerRun(policy_t policy) {
                     currentPCB->prev = readyQueue.tail;
                     readyQueue.tail->next = currentPCB;
                     readyQueue.tail = currentPCB;
+                    readyQueue.tail->next = NULL;
                 }
             }
             break;
