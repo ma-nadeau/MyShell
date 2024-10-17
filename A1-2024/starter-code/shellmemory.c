@@ -15,6 +15,7 @@ struct PCB {
     int pid;
     int memoryStartIdx;
     int lengthCode;
+    int lengthScore;
     int programCounter;
     struct PCB *next;
     struct PCB *prev;
@@ -292,6 +293,7 @@ int mem_load_script(char *script) {
     newPCB->pid = rand();
     newPCB->memoryStartIdx = mem_idx;
     newPCB->lengthCode = scriptLength;
+    newPCB->lengthScore = scriptLength;
     newPCB->programCounter = mem_idx;
     newPCB->next = NULL;
 
@@ -388,9 +390,33 @@ void executeReadyQueuePCBs() {
     }
 }
 
+void orderIncreasingPCBs(){
+    struct PCB *smallest;
+    struct PCB *currentPCB;
+
+    smallest = readyQueue.head;
+    currentPCB = readyQueue.head->next;
+    // Here we are simply comparing the head with the other values, and
+    // selecting the one with the smallest number of lines
+    while (currentPCB) {
+        if (currentPCB->lengthScore < smallest->lengthScore) {
+            smallest = currentPCB;
+        }
+        currentPCB = currentPCB->next;
+    }
+
+    if (smallest != readyQueue.head) {
+        switchPCBs(smallest, readyQueue.head);
+    }
+    if (readyQueue.head->next && readyQueue.head->next->next &&
+        readyQueue.head->next->next->lengthScore <
+            readyQueue.head->next->lengthScore) {
+        switchPCBs(readyQueue.head->next, readyQueue.head->next->next);
+    }
+}
+
 void schedulerRun(policy_t policy) {
     struct PCB *currentPCB;
-    struct PCB *smallest;
     int line_idx;
     int programCounterTmp;
 
@@ -399,27 +425,7 @@ void schedulerRun(policy_t policy) {
             executeReadyQueuePCBs();
             break;
         case SJF:
-
-            smallest = readyQueue.head;
-            currentPCB = readyQueue.head->next;
-            // Here we are simply comparing the head with the other values, and
-            // selecting the one with the smallest number of lines
-            while (currentPCB) {
-                if (currentPCB->lengthCode < smallest->lengthCode) {
-                    smallest = currentPCB;
-                }
-                currentPCB = currentPCB->next;
-            }
-
-            if (smallest != readyQueue.head) {
-                switchPCBs(smallest, readyQueue.head);
-            }
-            if (readyQueue.head->next && readyQueue.head->next->next &&
-                readyQueue.head->next->next->lengthCode <
-                    readyQueue.head->next->lengthCode) {
-                switchPCBs(readyQueue.head->next, readyQueue.head->next->next);
-            }
-
+            orderIncreasingPCBs();
             executeReadyQueuePCBs();
             break;
         case RR:
@@ -452,5 +458,35 @@ void schedulerRun(policy_t policy) {
                 }
             }
             break;
+        case AGING:
+            while(readyQueue.head){
+                // Reassessing
+                orderIncreasingPCBs();
+
+                // Time slice
+                convertInputToOneLiners(shellmemoryCode[readyQueue.head->programCounter]);
+                readyQueue.head->programCounter++;
+
+                // Aging all processes
+                currentPCB = readyQueue.head->next;
+                while(currentPCB){
+                    // Make sure that the length score is not null
+                    if (currentPCB->lengthScore){
+                        currentPCB->lengthScore--;
+                    }
+                    currentPCB = currentPCB->next;
+                }
+                
+                // Check if process has stopped running
+                if (readyQueue.head->programCounter ==
+                    readyQueue.head->memoryStartIdx + readyQueue.head->lengthCode) {
+                    // Update readyQueue.head
+                    if (readyQueue.head->next) {  
+                        readyQueue.head->next->prev = NULL;
+                    }
+                    readyQueue.head = readyQueue.head->next;
+                    deallocateMemoryScript(currentPCB);
+                }
+            }
     }
 }
