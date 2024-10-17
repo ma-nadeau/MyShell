@@ -8,6 +8,7 @@ typedef enum policy_t {
     FCFS = 0,
     SJF,
     RR,
+    RR30,
     AGING,
     INVALID_POLICY
 } policy_t;

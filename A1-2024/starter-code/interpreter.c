@@ -126,11 +126,28 @@ int interpreter(char *command_args[], int args_size) {
         return my_cd(command_args[1]);
 
     } else if (strcmp(command_args[0], "exec") == 0) {
-        policy_t policy = policy_parser(command_args[args_size - 1]);
-        if (args_size < 3 || args_size > 5 || policy == INVALID_POLICY)
+        char *last_arg = command_args[args_size - 1];
+        policy_t policy;
+
+        if (args_size < 3)
             return badcommand(COMMAND_ERROR_BAD_COMMAND);
 
-        return exec(command_args + 1, args_size - 2, policy);
+        if (strcmp(last_arg, "#") == 0) {
+            policy = policy_parser(command_args[args_size - 2]);
+
+            if (policy == INVALID_POLICY) {
+                return badcommand(COMMAND_ERROR_BAD_COMMAND);
+            }
+            exec(command_args + 1, args_size - 3, policy);
+            return -1;
+
+        } else {
+            policy = policy_parser(command_args[args_size - 1]);
+            if (policy == INVALID_POLICY) {
+                return badcommand(COMMAND_ERROR_BAD_COMMAND);
+            }
+            return exec(command_args + 1, args_size - 2, policy);
+        }
 
     } else {
         return badcommand(COMMAND_ERROR_BAD_COMMAND);
@@ -434,7 +451,9 @@ policy_t policy_parser(char policy_str[]) {
     } else if (strcmp(policy_str, "SJF") == 0) {
         return SJF;
     } else if (strcmp(policy_str, "RR") == 0) {
-        return RR;
+        return RR;}
+    else if (strcmp(policy_str, "RR30") == 0) {
+        return RR30;
     } else if (strcmp(policy_str, "AGING") == 0) {
         return AGING;
     } else {
