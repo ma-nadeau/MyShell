@@ -262,6 +262,39 @@ void deallocateMemoryScript(struct PCB *pcb) {
     free(pcb);
 }
 
+void detachPCBFromQueue(struct PCB *p1){
+    // Case where p1 is at the head
+    if (readyQueue.head == p1){
+        readyQueue.head = readyQueue.head->next;
+        // Check if there are any PCBs left in the queue
+        if (readyQueue.head) {
+            readyQueue.head->prev = NULL;
+        } else {
+            // If not then update the tail
+            readyQueue.tail = NULL;
+        }
+    } else if (readyQueue.tail == p1){
+        readyQueue.tail = readyQueue.tail->prev;
+        
+        if (readyQueue.tail) {
+            readyQueue.tail->next = NULL;
+        }
+
+    } else {
+        p1->prev->next = p1->next;
+        p1->next->prev = p1->prev;
+    }
+
+    // Remove all attachment (free from desire)
+    p1->next = NULL;
+    p1->prev = NULL;
+}
+
+void removePCBFromQueue(struct PCB *p1){
+    detachPCBFromQueue(p1);
+    deallocateMemoryScript(p1);
+}
+
 // Function to load a new script in memory
 int mem_load_script(char *script) {
     char line[MAX_USER_INPUT];
@@ -415,10 +448,55 @@ void orderIncreasingPCBs(){
     }
 }
 
-void schedulerRun(policy_t policy) {
+void placePCBHeadAtEndOfDLL(){
+    struct PCB *tmp;
+
+    // Check for case where list is empty or one PCB only
+    if (readyQueue.tail == readyQueue.head){
+        return;
+    }
+    tmp = readyQueue.head;
+
+    // Update the head
+    readyQueue.head = readyQueue.head->next;
+    readyQueue.head->prev = NULL;
+    
+    // Update the tail
+    readyQueue.tail->next=tmp;
+    tmp->prev = readyQueue.tail;
+    tmp->next = NULL;
+    readyQueue.tail = tmp;
+}
+
+void runRR(int lineNumber){
     struct PCB *currentPCB;
     int line_idx;
     int programCounterTmp;
+    while (readyQueue.head) {
+                currentPCB = readyQueue.head;
+
+                // Execute 2 lines of code
+                programCounterTmp = currentPCB->programCounter;
+                for (line_idx = currentPCB->programCounter;
+                     line_idx <
+                         currentPCB->memoryStartIdx + currentPCB->lengthCode &&
+                     line_idx < programCounterTmp + lineNumber;
+                     line_idx++, currentPCB->programCounter++) {
+                    convertInputToOneLiners(shellmemoryCode[line_idx]);
+                }
+                // Check if process has finished running
+                if (currentPCB->programCounter ==
+                    currentPCB->memoryStartIdx + currentPCB->lengthCode) {
+                    removePCBFromQueue(currentPCB);
+                } else {
+                    placePCBHeadAtEndOfDLL();
+                }
+            }
+}
+
+void schedulerRun(policy_t policy) {
+    struct PCB *currentPCB, *smallest, *currentHead;
+    int line_idx, programCounterTmp;
 
     switch (policy) {
         case FCFS:
@@ -429,39 +507,16 @@ void schedulerRun(policy_t policy) {
             executeReadyQueuePCBs();
             break;
         case RR:
-            while (readyQueue.head) {
-                currentPCB = readyQueue.head;
-
-                // Execute 2 lines of code
-                programCounterTmp = currentPCB->programCounter;
-                for (line_idx = currentPCB->programCounter;
-                     line_idx <
-                         currentPCB->memoryStartIdx + currentPCB->lengthCode &&
-                     line_idx < programCounterTmp + 2;
-                     line_idx++, currentPCB->programCounter++) {
-                    convertInputToOneLiners(shellmemoryCode[line_idx]);
-                }
-                // Switch processes around
-                if (readyQueue.head->next) {  
-                    readyQueue.head->next->prev = NULL;
-                }
-                readyQueue.head = readyQueue.head->next;
-                // Check if process has finished running
-                if (currentPCB->programCounter ==
-                    currentPCB->memoryStartIdx + currentPCB->lengthCode) {
-                    deallocateMemoryScript(currentPCB);
-                } else {
-                    currentPCB->prev = readyQueue.tail;
-                    readyQueue.tail->next = currentPCB;
-                    readyQueue.tail = currentPCB;
-                    readyQueue.tail->next = NULL;
-                }
-            }
+            runRR(2);
+            break;
+        case RR30:
+            runRR(30);
             break;
         case AGING:
+            // First Assessment
+            orderIncreasingPCBs();
             while(readyQueue.head){
-                // Reassessing
-                orderIncreasingPCBs();
+                currentHead = readyQueue.head;
 
                 // Time slice
                 convertInputToOneLiners(shellmemoryCode[readyQueue.head->programCounter]);
@@ -480,13 +535,39 @@ void schedulerRun(policy_t policy) {
                 // Check if process has stopped running
                 if (readyQueue.head->programCounter ==
                     readyQueue.head->memoryStartIdx + readyQueue.head->lengthCode) {
-                    // Update readyQueue.head
-                    if (readyQueue.head->next) {  
-                        readyQueue.head->next->prev = NULL;
-                    }
-                    readyQueue.head = readyQueue.head->next;
-                    deallocateMemoryScript(currentPCB);
+                    removePCBFromQueue(readyQueue.head);
                 }
+                
+                // Check if there are any other processes left
+                if(!readyQueue.head){
+                    break;
+                }
+
+                // Find the process with lowest score closest to Head of list
+                currentPCB = readyQueue.head;
+                smallest = currentPCB;
+                while(currentPCB){
+                    if (currentPCB->lengthScore < smallest->lengthScore){
+                        smallest = currentPCB;
+                    }
+                    currentPCB=currentPCB->next;
+                }
+
+                // Preempt the head if it didn't finish running
+                if (currentHead == readyQueue.head){
+                    placePCBHeadAtEndOfDLL();
+                }
+                // Put the smallest PCB at the start of the queue
+                detachPCBFromQueue(smallest);
+                smallest->next = readyQueue.head;
+                smallest->prev = NULL;
+                if (readyQueue.head){
+                    readyQueue.head->prev = smallest;
+                } else {
+                    readyQueue.tail = smallest;
+                }
+                readyQueue.head = smallest;
             }
+            break;
     }
 }
