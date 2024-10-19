@@ -1,0 +1,4 @@
+exec ../scripts/prog1.txt RR30 #
+echo progDone
+echo progDone2
+echo progDone3

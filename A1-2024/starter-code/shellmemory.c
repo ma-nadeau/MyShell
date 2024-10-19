@@ -162,27 +162,6 @@ void mem_get_value(char *var_in, char *buffer) {
     return;
 }
 
-int codeLength(char *script) {
-    FILE *p = fopen(script, "rt");  // the program is in a file
-    int count = 1;
-    char c;
-
-    if (p == NULL) {
-        return -1;
-    }
-
-    do {
-        c = getc(p);
-        if (c == '\n') {
-            count++;
-        }
-    } while (c != EOF);
-
-    fclose(p);
-
-    return count;
-}
-
 int allocateMemoryScript(int scriptLength) {
     int tmp;
     // Fetch available memory list head
@@ -296,30 +275,33 @@ void removePCBFromQueue(struct PCB *p1){
 }
 
 // Function to load a new script in memory
-int mem_load_script(char *script) {
+int mem_load_script(FILE *p) {
     char line[MAX_USER_INPUT];
-    int scriptLength = codeLength(script);
-    int line_idx, mem_idx;
-    FILE *p = fopen(script, "rt");  // the program is in a file
+    int scriptLength = 0, line_idx, mem_idx;
     struct PCB *newPCB;
+    char *scriptLines[MEM_SIZE];
 
-    if (p == NULL || scriptLength == -1) {
+    if (p == NULL) {
         return -1;
     }
 
-    mem_idx = allocateMemoryScript(scriptLength);
-
-    for (line_idx = mem_idx; line_idx < mem_idx + scriptLength; line_idx++) {
+    while (1) {
         fgets(line, MAX_USER_INPUT - 1, p);
-        shellmemoryCode[line_idx] = strdup(line);
+        scriptLines[scriptLength] = strdup(line);
+        scriptLength++;
+
         memset(line, 0, sizeof(line));
 
         if (feof(p)) {
             break;
         }
     }
+    
+    mem_idx = allocateMemoryScript(scriptLength);
 
-    fclose(p);
+    for (line_idx = mem_idx; line_idx < mem_idx + scriptLength; line_idx++) {
+        shellmemoryCode[line_idx] = scriptLines[line_idx - mem_idx];
+    }
 
     // Initialize new PCB
     newPCB = (struct PCB *)malloc(sizeof(struct PCB));
@@ -423,12 +405,18 @@ void executeReadyQueuePCBs() {
     }
 }
 
-void orderIncreasingPCBs(){
+void orderIncreasingPCBs(int isRunningBackground){
     struct PCB *smallest;
     struct PCB *currentPCB;
+    struct PCB *headWithoutMain;
 
-    smallest = readyQueue.head;
-    currentPCB = readyQueue.head->next;
+    if (isRunningBackground) {
+        headWithoutMain = readyQueue.head->next;
+    }
+
+    smallest = headWithoutMain;
+    currentPCB = headWithoutMain->next;
+
     // Here we are simply comparing the head with the other values, and
     // selecting the one with the smallest number of lines
     while (currentPCB) {
@@ -438,13 +426,13 @@ void orderIncreasingPCBs(){
         currentPCB = currentPCB->next;
     }
 
-    if (smallest != readyQueue.head) {
-        switchPCBs(smallest, readyQueue.head);
+    if (smallest != headWithoutMain) {
+        switchPCBs(smallest, headWithoutMain);
     }
-    if (readyQueue.head->next && readyQueue.head->next->next &&
-        readyQueue.head->next->next->lengthScore <
-            readyQueue.head->next->lengthScore) {
-        switchPCBs(readyQueue.head->next, readyQueue.head->next->next);
+    if (headWithoutMain->next && headWithoutMain->next->next &&
+        headWithoutMain->next->next->lengthScore <
+            headWithoutMain->next->lengthScore) {
+        switchPCBs(headWithoutMain->next, headWithoutMain->next->next);
     }
 }
 
@@ -494,7 +482,7 @@ void runRR(int lineNumber){
             }
 }
 
-void schedulerRun(policy_t policy) {
+void schedulerRun(policy_t policy, int isRunningBackground) {
     struct PCB *currentPCB, *smallest, *currentHead;
     int line_idx, programCounterTmp;
 
@@ -503,7 +491,7 @@ void schedulerRun(policy_t policy) {
             executeReadyQueuePCBs();
             break;
         case SJF:
-            orderIncreasingPCBs();
+            orderIncreasingPCBs(isRunningBackground);
             executeReadyQueuePCBs();
             break;
         case RR:
@@ -514,7 +502,7 @@ void schedulerRun(policy_t policy) {
             break;
         case AGING:
             // First Assessment
-            orderIncreasingPCBs();
+            orderIncreasingPCBs(isRunningBackground);
             while(readyQueue.head){
                 currentHead = readyQueue.head;
 

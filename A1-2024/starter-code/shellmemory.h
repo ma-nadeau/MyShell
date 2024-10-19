@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #define MEM_SIZE 1000
 #define MAX_VALUE_SIZE 5
 #define MAX_TOKEN_SIZE 200
@@ -18,5 +20,5 @@ void mem_get_value(char *var, char *buffer);
 void mem_set_value(char *var_in, char *values_in[], int number_values);
 int mem_get_variable_index(char *var_in);
 
-int mem_load_script(char *script);
-void schedulerRun(policy_t policy);
+int mem_load_script(FILE *p);
+void schedulerRun(policy_t policy, int isRunningBackground);

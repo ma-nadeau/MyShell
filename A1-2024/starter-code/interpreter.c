@@ -64,7 +64,7 @@ int filterOutParentAndCurrentDirectory(const struct dirent *entry);
 int custom_sort(const struct dirent **d1, const struct dirent **d2);
 int is_alphanumeric_list(char **lst, int len_lst);
 policy_t policy_parser(char policy_str[]);
-int exec(char *scripts[], int scripts_number, policy_t policy);
+int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground);
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -126,12 +126,21 @@ int interpreter(char *command_args[], int args_size) {
         return my_cd(command_args[1]);
 
     } else if (strcmp(command_args[0], "exec") == 0) {
-        policy_t policy = policy_parser(command_args[args_size - 1]);
-        if (args_size < 3 || args_size > 5 || policy == INVALID_POLICY)
+        policy_t policy;
+        int isRunningInBackground;
+
+        if (strcmp(command_args[args_size - 1], "#") == 0) {
+            isRunningInBackground = 1;
+            policy = policy_parser(command_args[args_size - 2]);
+        } else{
+            isRunningInBackground = 0;
+            policy = policy_parser(command_args[args_size - 1]);
+        }
+
+        if (args_size < 3 || args_size > 7 || policy == INVALID_POLICY)
             return badcommand(COMMAND_ERROR_BAD_COMMAND);
-
-        return exec(command_args + 1, args_size - 2, policy);
-
+        
+        return exec(command_args + 1, args_size - (isRunningInBackground ? 3 : 2), policy, isRunningInBackground);
     } else {
         return badcommand(COMMAND_ERROR_BAD_COMMAND);
     }
@@ -307,18 +316,28 @@ int my_cd(char *input) {
 
 int run(char *script) {
     int errCode = 0;
-    errCode = mem_load_script(script);
-    if (!errCode) {
-        schedulerRun(FCFS);
-    } else if (errCode == -1) {
+    FILE *p;
+
+    p = fopen(script, "rt");  // the program is in a file
+    if (p == NULL){
         errCode = badcommand(COMMAND_ERROR_FILE_INEXISTENT);
+    } else {
+        errCode = mem_load_script(p);
+        if (!errCode) {
+            schedulerRun(FCFS, 0);
+        } else if (errCode == -1) {
+            errCode = badcommand(COMMAND_ERROR_FILE_INEXISTENT);
+        }
+
+        fclose(p);
     }
+    
     return errCode;
 }
 
-int exec(char *scripts[], int scripts_number, policy_t policy) {
-    int script_idx;
-    int errCode = 0;
+int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground) {
+    int script_idx, errCode = 0;
+    FILE *p;
 
     // Making sure that script filenames are different
     if (scripts_number > 1) {
@@ -333,14 +352,27 @@ int exec(char *scripts[], int scripts_number, policy_t policy) {
         }
     }
 
-    // Loading scripts into memory and checking for any errors
-    for (script_idx = 0; script_idx < scripts_number; script_idx++) {
-        if (mem_load_script(scripts[script_idx])) {
-            return badcommand(COMMAND_ERROR_BAD_COMMAND);
-        }
+    // Loading main shell if isRunningInBackground set to True
+    if (isRunningInBackground){
+        mem_load_script(stdin);
     }
 
-    schedulerRun(policy);
+    // Loading scripts into memory and checking for any errors
+    for (script_idx = 0; script_idx < scripts_number; script_idx++) {
+        p = fopen(scripts[script_idx], "rt");  // the program is in a file
+        // Check if file can be opened
+        if (p == NULL) {
+        return badcommand(COMMAND_ERROR_FILE_INEXISTENT);
+        }
+
+        if (mem_load_script(p)) {
+            return badcommand(COMMAND_ERROR_BAD_COMMAND);
+        }
+
+        fclose(p);
+    }
+
+    schedulerRun(policy, isRunningInBackground);
 }
 
 /*** HELPER FUNCTIONS ***/
@@ -435,6 +467,8 @@ policy_t policy_parser(char policy_str[]) {
         return SJF;
     } else if (strcmp(policy_str, "RR") == 0) {
         return RR;
+    } else if (strcmp(policy_str, "RR30") == 0) {
+        return RR30;
     } else if (strcmp(policy_str, "AGING") == 0) {
         return AGING;
     } else {
