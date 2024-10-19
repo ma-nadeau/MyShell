@@ -1,0 +1,4 @@
+echo B
+echo B
+echo B
+echo B

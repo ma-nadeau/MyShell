@@ -64,7 +64,7 @@ int filterOutParentAndCurrentDirectory(const struct dirent *entry);
 int custom_sort(const struct dirent **d1, const struct dirent **d2);
 int is_alphanumeric_list(char **lst, int len_lst);
 policy_t policy_parser(char policy_str[]);
-int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground);
+int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground, int isRunningConcurrently);
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -127,20 +127,17 @@ int interpreter(char *command_args[], int args_size) {
 
     } else if (strcmp(command_args[0], "exec") == 0) {
         policy_t policy;
-        int isRunningInBackground;
+        int isRunningInBackground, isRunningConcurrently;
 
-        if (strcmp(command_args[args_size - 1], "#") == 0) {
-            isRunningInBackground = 1;
-            policy = policy_parser(command_args[args_size - 2]);
-        } else{
-            isRunningInBackground = 0;
-            policy = policy_parser(command_args[args_size - 1]);
-        }
+        isRunningConcurrently = strcmp(command_args[args_size - 1], "MT") == 0 ? 1 : 0;
+        isRunningInBackground = strcmp(command_args[args_size - 1 - isRunningConcurrently], "#") == 0 ? 1 : 0;
+        policy = policy_parser(command_args[args_size - 1 - isRunningConcurrently - isRunningInBackground]);
+
 
         if (args_size < 3 || args_size > 7 || policy == INVALID_POLICY)
             return badcommand(COMMAND_ERROR_BAD_COMMAND);
         
-        return exec(command_args + 1, args_size - (isRunningInBackground ? 3 : 2), policy, isRunningInBackground);
+        return exec(command_args + 1, args_size - 2 - isRunningConcurrently - isRunningInBackground, policy, isRunningInBackground, isRunningConcurrently);
     } else {
         return badcommand(COMMAND_ERROR_BAD_COMMAND);
     }
@@ -160,6 +157,7 @@ run SCRIPT.TXT		Executes the file SCRIPT.TXT\n ";
 }
 
 int quit() {
+    joinAllThreads();
     printf("Bye!\n");
     exit(0);
 }
@@ -324,7 +322,7 @@ int run(char *script) {
     } else {
         errCode = mem_load_script(p);
         if (!errCode) {
-            schedulerRun(FCFS, 0);
+            schedulerRun(FCFS, 0, 0);
         } else if (errCode == -1) {
             errCode = badcommand(COMMAND_ERROR_FILE_INEXISTENT);
         }
@@ -335,7 +333,7 @@ int run(char *script) {
     return errCode;
 }
 
-int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground) {
+int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground, int isRunningConcurrently) {
     int script_idx, errCode = 0;
     FILE *p;
 
@@ -372,7 +370,7 @@ int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBa
         fclose(p);
     }
 
-    schedulerRun(policy, isRunningInBackground);
+    schedulerRun(policy, isRunningInBackground, isRunningConcurrently);
 }
 
 /*** HELPER FUNCTIONS ***/

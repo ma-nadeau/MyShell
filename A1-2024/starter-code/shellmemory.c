@@ -1,10 +1,13 @@
 #include "shellmemory.h"
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "shell.h"
+#include <semaphore.h>
+
 
 struct memory_struct {
     char *var;
@@ -32,6 +35,17 @@ struct availableMemory {
     struct availableMemory *next;
     struct availableMemory *prev;
 };
+
+pthread_t workers[WORKERS_NUMBER];
+int isRunningWorkers;
+int isTimeToExit;
+
+sem_t isThereWorkSem;
+
+pthread_mutex_t pickHeadReadyQueue;
+
+policy_t policyGlobal;
+int isRunningBackgroundGlobal;
 
 struct memory_struct shellmemory[MEM_SIZE];
 char *shellmemoryCode[MEM_SIZE];
@@ -74,6 +88,14 @@ void mem_init() {
     availableMemoryHead->length = MEM_SIZE;
     availableMemoryHead->next = NULL;
     availableMemoryHead->prev = NULL;
+
+    isRunningWorkers = 0;
+    sem_init(&isThereWorkSem, 0, 0);
+    policyGlobal = INVALID_POLICY;
+    isRunningBackgroundGlobal = 0;
+    isTimeToExit = 0;
+
+    pthread_mutex_init(&pickHeadReadyQueue, NULL);
 }
 
 // clear value of a variable
@@ -241,9 +263,9 @@ void deallocateMemoryScript(struct PCB *pcb) {
     free(pcb);
 }
 
-void detachPCBFromQueue(struct PCB *p1){
+void detachPCBFromQueue(struct PCB *p1) {
     // Case where p1 is at the head
-    if (readyQueue.head == p1){
+    if (readyQueue.head == p1) {
         readyQueue.head = readyQueue.head->next;
         // Check if there are any PCBs left in the queue
         if (readyQueue.head) {
@@ -252,9 +274,9 @@ void detachPCBFromQueue(struct PCB *p1){
             // If not then update the tail
             readyQueue.tail = NULL;
         }
-    } else if (readyQueue.tail == p1){
+    } else if (readyQueue.tail == p1) {
         readyQueue.tail = readyQueue.tail->prev;
-        
+
         if (readyQueue.tail) {
             readyQueue.tail->next = NULL;
         }
@@ -269,7 +291,7 @@ void detachPCBFromQueue(struct PCB *p1){
     p1->prev = NULL;
 }
 
-void removePCBFromQueue(struct PCB *p1){
+void removePCBFromQueue(struct PCB *p1) {
     detachPCBFromQueue(p1);
     deallocateMemoryScript(p1);
 }
@@ -296,7 +318,7 @@ int mem_load_script(FILE *p) {
             break;
         }
     }
-    
+
     mem_idx = allocateMemoryScript(scriptLength);
 
     for (line_idx = mem_idx; line_idx < mem_idx + scriptLength; line_idx++) {
@@ -344,24 +366,24 @@ void switchPCBs(struct PCB *p1, struct PCB *p2) {
 
     // Updating next att for p1 and p2
     tmp = p2->next;
-    if (p1->next != p2){
+    if (p1->next != p2) {
         p2->next = p1->next;
     } else {
         p2->next = p1;
     }
-    if (tmp != p1){
+    if (tmp != p1) {
         p1->next = tmp;
     } else {
         p1->next = p2;
     }
     // Updating prev att for p1 and p2
     tmp = p2->prev;
-    if (p1->prev != p2){
+    if (p1->prev != p2) {
         p2->prev = p1->prev;
     } else {
         p2->prev = p1;
     }
-    if (tmp != p1){
+    if (tmp != p1) {
         p1->prev = tmp;
     } else {
         p1->prev = p2;
@@ -386,15 +408,16 @@ void executeReadyQueuePCBs() {
     struct PCB *currentPCB;
 
     while (readyQueue.head) {
-        currentPCB = readyQueue.head;
 
-        readyQueue.head = currentPCB->next;
-        if (readyQueue.tail == currentPCB){
-            readyQueue.tail = NULL;
+        // Check if there are any processes left
+        // Pick the first one if so
+        pthread_mutex_lock(&pickHeadReadyQueue);
+        if (readyQueue.head){
+            currentPCB = readyQueue.head;
+            detachPCBFromQueue(readyQueue.head);
         }
-        if (readyQueue.head) {
-            readyQueue.head->prev = NULL;
-        }
+        pthread_mutex_unlock(&pickHeadReadyQueue);
+
         // Execute all lines of code
         for (line_idx = currentPCB->programCounter;
              line_idx < currentPCB->memoryStartIdx + currentPCB->lengthCode;
@@ -405,7 +428,7 @@ void executeReadyQueuePCBs() {
     }
 }
 
-void orderIncreasingPCBs(int isRunningBackground){
+void orderIncreasingPCBs(int isRunningBackground) {
     struct PCB *smallest;
     struct PCB *currentPCB;
     struct PCB *headWithoutMain;
@@ -436,11 +459,11 @@ void orderIncreasingPCBs(int isRunningBackground){
     }
 }
 
-void placePCBHeadAtEndOfDLL(){
+void placePCBHeadAtEndOfDLL() {
     struct PCB *tmp;
 
     // Check for case where list is empty or one PCB only
-    if (readyQueue.tail == readyQueue.head){
+    if (readyQueue.tail == readyQueue.head) {
         return;
     }
     tmp = readyQueue.head;
@@ -448,44 +471,101 @@ void placePCBHeadAtEndOfDLL(){
     // Update the head
     readyQueue.head = readyQueue.head->next;
     readyQueue.head->prev = NULL;
-    
+
     // Update the tail
-    readyQueue.tail->next=tmp;
+    readyQueue.tail->next = tmp;
     tmp->prev = readyQueue.tail;
     tmp->next = NULL;
     readyQueue.tail = tmp;
 }
 
-void runRR(int lineNumber){
+void runRR(int lineNumber) {
     struct PCB *currentPCB;
     int line_idx;
     int programCounterTmp;
     while (readyQueue.head) {
-                currentPCB = readyQueue.head;
+        currentPCB = readyQueue.head;
 
-                // Execute 2 lines of code
-                programCounterTmp = currentPCB->programCounter;
-                for (line_idx = currentPCB->programCounter;
-                     line_idx <
-                         currentPCB->memoryStartIdx + currentPCB->lengthCode &&
-                     line_idx < programCounterTmp + lineNumber;
-                     line_idx++, currentPCB->programCounter++) {
-                    convertInputToOneLiners(shellmemoryCode[line_idx]);
-                }
-                // Check if process has finished running
-                if (currentPCB->programCounter ==
-                    currentPCB->memoryStartIdx + currentPCB->lengthCode) {
-                    removePCBFromQueue(currentPCB);
-                } else {
-                    placePCBHeadAtEndOfDLL();
-                }
-            }
+        // Execute lineNumber lines of code
+        programCounterTmp = currentPCB->programCounter;
+        for (line_idx = currentPCB->programCounter;
+             line_idx < currentPCB->memoryStartIdx + currentPCB->lengthCode &&
+             line_idx < programCounterTmp + lineNumber;
+             line_idx++, currentPCB->programCounter++) {
+            convertInputToOneLiners(shellmemoryCode[line_idx]);
+        }
+        // Check if process has finished running
+        if (currentPCB->programCounter ==
+            currentPCB->memoryStartIdx + currentPCB->lengthCode) {
+            removePCBFromQueue(currentPCB);
+        } else {
+            placePCBHeadAtEndOfDLL();
+        }
+    }
 }
 
-void schedulerRun(policy_t policy, int isRunningBackground) {
+void runAging(int isRunningBackground) {
     struct PCB *currentPCB, *smallest, *currentHead;
     int line_idx, programCounterTmp;
+    // First Assessment
+    orderIncreasingPCBs(isRunningBackground);
+    while (readyQueue.head) {
+        currentHead = readyQueue.head;
 
+        // Time slice
+        convertInputToOneLiners(
+            shellmemoryCode[readyQueue.head->programCounter]);
+        readyQueue.head->programCounter++;
+
+        // Aging all processes
+        currentPCB = readyQueue.head->next;
+        while (currentPCB) {
+            // Make sure that the length score is not null
+            if (currentPCB->lengthScore) {
+                currentPCB->lengthScore--;
+            }
+            currentPCB = currentPCB->next;
+        }
+
+        // Check if process has stopped running
+        if (readyQueue.head->programCounter ==
+            readyQueue.head->memoryStartIdx + readyQueue.head->lengthCode) {
+            removePCBFromQueue(readyQueue.head);
+        }
+
+        // Check if there are any other processes left
+        if (!readyQueue.head) {
+            break;
+        }
+
+        // Find the process with lowest score closest to Head of list
+        currentPCB = readyQueue.head;
+        smallest = currentPCB;
+        while (currentPCB) {
+            if (currentPCB->lengthScore < smallest->lengthScore) {
+                smallest = currentPCB;
+            }
+            currentPCB = currentPCB->next;
+        }
+
+        // Preempt the head if it didn't finish running
+        if (currentHead == readyQueue.head) {
+            placePCBHeadAtEndOfDLL();
+        }
+        // Put the smallest PCB at the start of the queue
+        detachPCBFromQueue(smallest);
+        smallest->next = readyQueue.head;
+        smallest->prev = NULL;
+        if (readyQueue.head) {
+            readyQueue.head->prev = smallest;
+        } else {
+            readyQueue.tail = smallest;
+        }
+        readyQueue.head = smallest;
+    }
+}
+
+void selectSchedule(policy_t policy, int isRunningBackground) {
     switch (policy) {
         case FCFS:
             executeReadyQueuePCBs();
@@ -501,61 +581,55 @@ void schedulerRun(policy_t policy, int isRunningBackground) {
             runRR(30);
             break;
         case AGING:
-            // First Assessment
-            orderIncreasingPCBs(isRunningBackground);
-            while(readyQueue.head){
-                currentHead = readyQueue.head;
-
-                // Time slice
-                convertInputToOneLiners(shellmemoryCode[readyQueue.head->programCounter]);
-                readyQueue.head->programCounter++;
-
-                // Aging all processes
-                currentPCB = readyQueue.head->next;
-                while(currentPCB){
-                    // Make sure that the length score is not null
-                    if (currentPCB->lengthScore){
-                        currentPCB->lengthScore--;
-                    }
-                    currentPCB = currentPCB->next;
-                }
-                
-                // Check if process has stopped running
-                if (readyQueue.head->programCounter ==
-                    readyQueue.head->memoryStartIdx + readyQueue.head->lengthCode) {
-                    removePCBFromQueue(readyQueue.head);
-                }
-                
-                // Check if there are any other processes left
-                if(!readyQueue.head){
-                    break;
-                }
-
-                // Find the process with lowest score closest to Head of list
-                currentPCB = readyQueue.head;
-                smallest = currentPCB;
-                while(currentPCB){
-                    if (currentPCB->lengthScore < smallest->lengthScore){
-                        smallest = currentPCB;
-                    }
-                    currentPCB=currentPCB->next;
-                }
-
-                // Preempt the head if it didn't finish running
-                if (currentHead == readyQueue.head){
-                    placePCBHeadAtEndOfDLL();
-                }
-                // Put the smallest PCB at the start of the queue
-                detachPCBFromQueue(smallest);
-                smallest->next = readyQueue.head;
-                smallest->prev = NULL;
-                if (readyQueue.head){
-                    readyQueue.head->prev = smallest;
-                } else {
-                    readyQueue.tail = smallest;
-                }
-                readyQueue.head = smallest;
-            }
+            runAging(isRunningBackground);
             break;
+    }
+}
+
+void *workerThread(void *arg) {
+    while (1) {
+        sem_wait(&isThereWorkSem);
+        if (isTimeToExit) {
+            pthread_exit(NULL);
+        }
+        selectSchedule(policyGlobal, isRunningBackgroundGlobal);
+    }
+}
+
+void schedulerRun(policy_t policy, int isRunningBackground,
+                  int isRunningConcurrently) {
+    struct PCB *currentPCB, *smallest, *currentHead;
+    int line_idx, programCounterTmp;
+
+    if (isRunningConcurrently && !isRunningWorkers) {
+        for (int i = 0; i < WORKERS_NUMBER; i++) {
+            pthread_create(&workers[i], NULL, workerThread, NULL);
+        }
+        isRunningWorkers = 1;
+    }
+
+    if (isRunningConcurrently) {
+        policyGlobal = policy;
+        if (isRunningBackground) {
+            isRunningBackgroundGlobal = isRunningBackground;
+        }
+        for (int i = 0; i < WORKERS_NUMBER; i++) {
+            sem_post(&isThereWorkSem);
+        }
+    } else {
+        selectSchedule(policy, isRunningBackground);
+    }
+}
+
+
+void joinAllThreads() {
+    if (isRunningWorkers){
+        isTimeToExit = 1;
+        for (int i = 0; i < WORKERS_NUMBER; i++) {
+            sem_post(&isThereWorkSem);
+        }
+        for (int i = 0; i < WORKERS_NUMBER; i++) {
+            pthread_join(workers[i], NULL);
+        }
     }
 }

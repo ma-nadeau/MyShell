@@ -5,6 +5,7 @@
 #define MAX_TOKEN_SIZE 200
 #define MAX_VARIABLE_VALUE_SIZE \
     ((MAX_VALUE_SIZE * MAX_TOKEN_SIZE) + MAX_VALUE_SIZE)
+#define WORKERS_NUMBER 2
 
 typedef enum policy_t {
     FCFS = 0,
@@ -21,4 +22,5 @@ void mem_set_value(char *var_in, char *values_in[], int number_values);
 int mem_get_variable_index(char *var_in);
 
 int mem_load_script(FILE *p);
-void schedulerRun(policy_t policy, int isRunningBackground);
+void schedulerRun(policy_t policy, int isRunningBackground, int isRunningInBackground);
+void joinAllThreads();
