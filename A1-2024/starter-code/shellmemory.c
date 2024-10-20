@@ -42,7 +42,9 @@ int isTimeToExit;
 
 sem_t isThereWorkSem;
 
-pthread_mutex_t pickHeadReadyQueue;
+pthread_mutex_t readyQueueLock;
+pthread_mutex_t memoryAvailabilityDLLLock;
+pthread_mutex_t memoryVariableArrayLock;
 
 policy_t policyGlobal;
 int isRunningBackgroundGlobal;
@@ -95,7 +97,9 @@ void mem_init() {
     isRunningBackgroundGlobal = 0;
     isTimeToExit = 0;
 
-    pthread_mutex_init(&pickHeadReadyQueue, NULL);
+    pthread_mutex_init(&readyQueueLock, NULL);
+    pthread_mutex_init(&memoryAvailabilityDLLLock, NULL);
+    pthread_mutex_init(&memoryVariableArrayLock, NULL);
 }
 
 // clear value of a variable
@@ -112,10 +116,11 @@ void mem_clear_value(int mem_idx) {
 
 // Set key value pair
 void mem_set_value(char *var_in, char *values_in[], int number_values) {
-    int mem_idx, val_idx;
+    int mem_idx, val_idx, wasSet = 0;
 
     // If variable exists, we overwrite the values
     for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
+        pthread_mutex_lock(&memoryVariableArrayLock);
         // Check to see if memory spot was not initialized (in which case we
         // reached the end of initialized variables) or whether the memory spot
         // corresponds to the variable passed as argument
@@ -134,12 +139,13 @@ void mem_set_value(char *var_in, char *values_in[], int number_values) {
                 shellmemory[mem_idx].value[val_idx] =
                     strdup(values_in[val_idx]);
             }
-            return;
+            wasSet = 1;
+        }
+        pthread_mutex_unlock(&memoryVariableArrayLock);
+        if (wasSet) {
+            break;
         }
     }
-
-    // out of memory here
-    return;
 }
 
 // get variable entry index in memory
@@ -185,7 +191,8 @@ void mem_get_value(char *var_in, char *buffer) {
 }
 
 int allocateMemoryScript(int scriptLength) {
-    int tmp;
+    pthread_mutex_lock(&memoryAvailabilityDLLLock);
+    int tmp = -1;
     // Fetch available memory list head
     struct availableMemory *blockPointer = availableMemoryHead;
     // Loop over available memory to find enough space
@@ -202,17 +209,20 @@ int allocateMemoryScript(int scriptLength) {
                 blockPointer->prev->next = blockPointer->next;
                 free(blockPointer);
             }
-            return tmp;
+            break;
         }
     }
 
     // If we end up here it means that no memory was available for the script
-    return -1;
+    pthread_mutex_unlock(&memoryAvailabilityDLLLock);
+    return tmp;
 }
 
 void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
+    pthread_mutex_lock(&memoryAvailabilityDLLLock);
     struct availableMemory *currentMemoryBlock = availableMemoryHead;
 
+    // Looping through the DLL
     while (currentMemoryBlock) {
         if (memoryStartIdx < currentMemoryBlock->memoryStartIdx) {
             // Check to see if the memory freed is contiguous with the memory
@@ -249,6 +259,7 @@ void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
         }
         currentMemoryBlock = currentMemoryBlock->next;
     }
+    pthread_mutex_unlock(&memoryAvailabilityDLLLock);
 }
 
 void deallocateMemoryScript(struct PCB *pcb) {
@@ -259,6 +270,7 @@ void deallocateMemoryScript(struct PCB *pcb) {
          line_idx < pcb->memoryStartIdx + pcb->lengthCode; line_idx++) {
         free(shellmemoryCode[line_idx]);
     }
+
     addMemoryAvailability(pcb->memoryStartIdx, pcb->lengthCode);
     free(pcb);
 }
@@ -411,12 +423,19 @@ void executeReadyQueuePCBs() {
 
         // Check if there are any processes left
         // Pick the first one if so
-        pthread_mutex_lock(&pickHeadReadyQueue);
+        pthread_mutex_lock(&readyQueueLock);
         if (readyQueue.head){
             currentPCB = readyQueue.head;
             detachPCBFromQueue(readyQueue.head);
+        } else {
+            currentPCB = NULL;
         }
-        pthread_mutex_unlock(&pickHeadReadyQueue);
+        pthread_mutex_unlock(&readyQueueLock);
+
+        // Check that by the time the lock was acquired, head was not null
+        if (!currentPCB){
+            break;
+        }
 
         // Execute all lines of code
         for (line_idx = currentPCB->programCounter;
@@ -479,12 +498,49 @@ void placePCBHeadAtEndOfDLL() {
     readyQueue.tail = tmp;
 }
 
+void placePCBAtEndOfDLL(struct PCB *p1) {
+    int wasPlaced = 0;
+    pthread_mutex_lock(&readyQueueLock);
+    // Check for case where list is empty
+    if (!readyQueue.head) {
+        readyQueue.head = p1;
+        readyQueue.tail = p1;
+        p1->next = NULL;
+        p1->prev = NULL;
+        wasPlaced = 1;
+    }
+
+    // Update the tail
+    if (!wasPlaced) {
+        readyQueue.tail->next = p1;
+        p1->prev = readyQueue.tail;
+        p1->next = NULL;
+        readyQueue.tail = p1;
+    }
+    pthread_mutex_unlock(&readyQueueLock);
+}
+
 void runRR(int lineNumber) {
     struct PCB *currentPCB;
     int line_idx;
     int programCounterTmp;
     while (readyQueue.head) {
-        currentPCB = readyQueue.head;
+        
+        // Check if there are any processes left
+        // Pick the first one if so
+        pthread_mutex_lock(&readyQueueLock);
+        if (readyQueue.head){
+            currentPCB = readyQueue.head;
+            detachPCBFromQueue(readyQueue.head);
+        } else {
+            currentPCB = NULL;
+        }
+        pthread_mutex_unlock(&readyQueueLock);
+
+        // Check that by the time the lock was acquired, head was not null
+        if (!currentPCB){
+            break;
+        }
 
         // Execute lineNumber lines of code
         programCounterTmp = currentPCB->programCounter;
@@ -497,9 +553,9 @@ void runRR(int lineNumber) {
         // Check if process has finished running
         if (currentPCB->programCounter ==
             currentPCB->memoryStartIdx + currentPCB->lengthCode) {
-            removePCBFromQueue(currentPCB);
+            deallocateMemoryScript(currentPCB);
         } else {
-            placePCBHeadAtEndOfDLL();
+            placePCBAtEndOfDLL(currentPCB);
         }
     }
 }
@@ -589,10 +645,10 @@ void selectSchedule(policy_t policy, int isRunningBackground) {
 void *workerThread(void *arg) {
     while (1) {
         sem_wait(&isThereWorkSem);
+        selectSchedule(policyGlobal, isRunningBackgroundGlobal);
         if (isTimeToExit) {
             pthread_exit(NULL);
         }
-        selectSchedule(policyGlobal, isRunningBackgroundGlobal);
     }
 }
 
@@ -613,8 +669,10 @@ void schedulerRun(policy_t policy, int isRunningBackground,
         if (isRunningBackground) {
             isRunningBackgroundGlobal = isRunningBackground;
         }
-        for (int i = 0; i < WORKERS_NUMBER; i++) {
-            sem_post(&isThereWorkSem);
+        if (readyQueue.head) {
+            for (int i = 0; i < WORKERS_NUMBER; i++) {
+                sem_post(&isThereWorkSem);
+            }
         }
     } else {
         selectSchedule(policy, isRunningBackground);
