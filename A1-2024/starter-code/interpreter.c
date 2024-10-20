@@ -23,6 +23,8 @@ typedef enum commandError_t {
     COMMAND_ERROR_NON_ALPHANUM
 } commandError_t;
 
+int execOnlyLoading = 0;
+
 int badcommand(commandError_t errorCode) {
     switch (errorCode) {
         case COMMAND_ERROR_BAD_COMMAND:
@@ -157,8 +159,8 @@ run SCRIPT.TXT		Executes the file SCRIPT.TXT\n ";
 }
 
 int quit() {
-    joinAllThreads();
     printf("Bye!\n");
+    joinAllThreads();
     exit(0);
 }
 
@@ -203,6 +205,7 @@ int echo(char *input) {
             return badcommand(
                 COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
         }
+
         mem_get_value(var_name, buffer);  // Retrieve variable value into buffer
         if (strcmp(buffer, "Variable does not exist") != 0 ||
             mem_get_variable_index(var_name) > -1) {
@@ -212,11 +215,6 @@ int echo(char *input) {
         }
 
     } else {  // Case for displaying string on a new line
-        // Input validation
-        if (!is_alphanumeric(input)) {
-            return badcommand(
-                COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
-        }
         printf("%s\n", input);
     }
 
@@ -353,6 +351,7 @@ int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBa
     // Loading main shell if isRunningInBackground set to True
     if (isRunningInBackground){
         mem_load_script(stdin);
+        execOnlyLoading = 1;
     }
 
     // Loading scripts into memory and checking for any errors
@@ -370,7 +369,9 @@ int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBa
         fclose(p);
     }
 
-    schedulerRun(policy, isRunningInBackground, isRunningConcurrently);
+    if (!execOnlyLoading || isRunningInBackground){
+        schedulerRun(policy, isRunningInBackground, isRunningConcurrently);
+    }
 }
 
 /*** HELPER FUNCTIONS ***/

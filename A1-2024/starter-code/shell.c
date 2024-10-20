@@ -13,7 +13,7 @@ int convertInputToOneLiners(char input[]);
 
 // Start of everything
 int main(int argc, char *argv[]) {
-    printf("Shell version 1.3 created September 2024\n");
+    printf("Shell version 1.3 created September 2024\n\n");
     // help();  //Not printing the help text anymore at start of shell
 
     char prompt = '$';               // Shell prompt

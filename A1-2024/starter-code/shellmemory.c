@@ -198,7 +198,7 @@ int allocateMemoryScript(int scriptLength) {
     // Loop over available memory to find enough space
     while (blockPointer) {
         // Enough space found
-        if (blockPointer->length >= scriptLength) {
+        if (scriptLength <= blockPointer->length) {
             // Update the available memory block
             tmp = blockPointer->memoryStartIdx;
             blockPointer->memoryStartIdx += scriptLength;
@@ -211,6 +211,7 @@ int allocateMemoryScript(int scriptLength) {
             }
             break;
         }
+        blockPointer = blockPointer->next;
     }
 
     // If we end up here it means that no memory was available for the script
@@ -253,6 +254,9 @@ void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
                     currentMemoryBlock->memoryStartIdx) {
                 currentMemoryBlock->prev->length += currentMemoryBlock->length;
                 currentMemoryBlock->prev->next = currentMemoryBlock->next;
+                if (currentMemoryBlock->next) {
+                    currentMemoryBlock->next->prev = currentMemoryBlock->prev;
+                }
                 free(currentMemoryBlock);
             }
             break;
@@ -452,9 +456,7 @@ void orderIncreasingPCBs(int isRunningBackground) {
     struct PCB *currentPCB;
     struct PCB *headWithoutMain;
 
-    if (isRunningBackground) {
-        headWithoutMain = readyQueue.head->next;
-    }
+    headWithoutMain = isRunningBackground ? readyQueue.head->next : readyQueue.head;
 
     smallest = headWithoutMain;
     currentPCB = headWithoutMain->next;
@@ -471,6 +473,10 @@ void orderIncreasingPCBs(int isRunningBackground) {
     if (smallest != headWithoutMain) {
         switchPCBs(smallest, headWithoutMain);
     }
+    
+    headWithoutMain = isRunningBackground ? readyQueue.head->next : readyQueue.head;
+
+    
     if (headWithoutMain->next && headWithoutMain->next->next &&
         headWithoutMain->next->next->lengthScore <
             headWithoutMain->next->lengthScore) {
@@ -560,11 +566,10 @@ void runRR(int lineNumber) {
     }
 }
 
-void runAging(int isRunningBackground) {
+void runAging() {
     struct PCB *currentPCB, *smallest, *currentHead;
     int line_idx, programCounterTmp;
-    // First Assessment
-    orderIncreasingPCBs(isRunningBackground);
+    
     while (readyQueue.head) {
         currentHead = readyQueue.head;
 
@@ -621,13 +626,11 @@ void runAging(int isRunningBackground) {
     }
 }
 
-void selectSchedule(policy_t policy, int isRunningBackground) {
+void selectSchedule(policy_t policy) {
     switch (policy) {
+        // Since the readyQueue for SJF was sorted in schedulerRun beforehand, it becomes the same as FCFS
         case FCFS:
-            executeReadyQueuePCBs();
-            break;
         case SJF:
-            orderIncreasingPCBs(isRunningBackground);
             executeReadyQueuePCBs();
             break;
         case RR:
@@ -637,7 +640,7 @@ void selectSchedule(policy_t policy, int isRunningBackground) {
             runRR(30);
             break;
         case AGING:
-            runAging(isRunningBackground);
+            runAging();
             break;
     }
 }
@@ -645,7 +648,7 @@ void selectSchedule(policy_t policy, int isRunningBackground) {
 void *workerThread(void *arg) {
     while (1) {
         sem_wait(&isThereWorkSem);
-        selectSchedule(policyGlobal, isRunningBackgroundGlobal);
+        selectSchedule(policyGlobal);
         if (isTimeToExit) {
             pthread_exit(NULL);
         }
@@ -656,6 +659,10 @@ void schedulerRun(policy_t policy, int isRunningBackground,
                   int isRunningConcurrently) {
     struct PCB *currentPCB, *smallest, *currentHead;
     int line_idx, programCounterTmp;
+
+    if (policy == SJF || policy == AGING){
+        orderIncreasingPCBs(isRunningBackground);
+    }
 
     if (isRunningConcurrently && !isRunningWorkers) {
         for (int i = 0; i < WORKERS_NUMBER; i++) {
@@ -675,7 +682,7 @@ void schedulerRun(policy_t policy, int isRunningBackground,
             }
         }
     } else {
-        selectSchedule(policy, isRunningBackground);
+        selectSchedule(policy);
     }
 }
 
