@@ -53,7 +53,21 @@ struct memory_struct shellmemory[MEM_SIZE];
 char *shellmemoryCode[MEM_SIZE];
 struct availableMemory *availableMemoryHead;
 
-// Helper functions
+/* ============================================
+ * Section: Helper Functions
+ * ============================================ */
+
+/**
+ * @brief Compares a model string with a variable string for an exact match.
+ *
+ * This function checks if the provided variable string matches the specified 
+ * model string character by character.
+ *
+ * @param model A pointer to the model string to be compared against.
+ * @param var A pointer to the variable string to be matched.
+ * @return Returns 1 if the strings match exactly, 0 if they do not match, 
+ *         or -1 if either string is NULL or if the lengths differ.
+ */
 int match(char *model, char *var) {
     int i, len = strlen(var), matchCount = 0;
     for (i = 0; i < len; i++) {
@@ -66,8 +80,21 @@ int match(char *model, char *var) {
     }
 }
 
-// Shell memory functions
+/* ============================================
+ * Section: Shell Memory Functions
+ *
+ * This section contains functions related to 
+ * memory management in the shell.
+ * ============================================ */
 
+
+/**
+ * @brief Initializes the memory for shell operations.
+ *
+ * This function sets up the necessary memory structures and resources required 
+ * for the shell's operation. It initializes the shell memory, the ready queue.
+ *
+ * */
 void mem_init() {
     // Initialize variable and code shellmemory
     int mem_idx, val_idx;
@@ -102,7 +129,14 @@ void mem_init() {
     pthread_mutex_init(&memoryVariableArrayLock, NULL);
 }
 
-// clear value of a variable
+/**
+ * @brief Clears the value of a variable in memory.
+ *
+ * This function takes the memory index of a variable and clears its value, effectively 
+ * resetting it to an uninitialized state.
+ *
+ * @param mem_idx The memory index of the variable whose value is to be cleared.
+ */
 void mem_clear_value(int mem_idx) {
     int val_idx = 0;
     while (val_idx < MAX_VALUE_SIZE &&
@@ -114,7 +148,17 @@ void mem_clear_value(int mem_idx) {
     return;
 }
 
-// Set key value pair
+/**
+ * @brief Sets a key-value pair in memory.
+ *
+ * This function takes a variable name and an array of values, associating the values 
+ * with the given variable name in memory. The number of values is specified by the 
+ * `number_values` parameter.
+ *
+ * @param var_in A pointer to a string representing the variable name (key) to be set.
+ * @param values_in An array of strings representing the values to be associated with the variable.
+ * @param number_values The number of values in the `values_in` array.
+ */
 void mem_set_value(char *var_in, char *values_in[], int number_values) {
     int mem_idx, val_idx, wasSet = 0;
 
@@ -148,7 +192,16 @@ void mem_set_value(char *var_in, char *values_in[], int number_values) {
     }
 }
 
-// get variable entry index in memory
+/**
+ * @brief Retrieves the index of a variable entry in memory.
+ *
+ * This function takes a variable name as input and searches for its corresponding 
+ * index in memory. It returns the index if the variable is found, or -1 if the 
+ * variable does not exist in memory.
+ *
+ * @param var_in A pointer to a string representing the variable name to be searched.
+ * @return Returns the index of the variable entry on success, or -1 if the variable is not found.
+ */
 int mem_get_variable_index(char *var_in) {
     int mem_idx, val_idx;
 
@@ -164,7 +217,15 @@ int mem_get_variable_index(char *var_in) {
     return -1;
 }
 
-// get value based on input key
+/**
+ * @brief Retrieves a value based on the provided input key.
+ *
+ * This function takes an input key (variable name) and retrieves its corresponding 
+ * value from memory, storing the result in the provided buffer.
+ *
+ * @param var_in A pointer to a string representing the input key (variable name).
+ * @param buffer A pointer to a buffer where the retrieved value will be stored.
+ */
 void mem_get_value(char *var_in, char *buffer) {
     int mem_idx, val_idx;
     char *space = " ";
@@ -190,6 +251,14 @@ void mem_get_value(char *var_in, char *buffer) {
     return;
 }
 
+/**
+ * @brief Allocates memory for a script.
+ *
+ * This function allocates a block of memory of the specified length to hold a script.
+ *
+ * @param scriptLength The length of the script for which memory needs to be allocated (i.e., the number of lines).
+ * @return Returns the starting index (i.e., the address in memory) on success, or -1 if an error occurs.
+ */
 int allocateMemoryScript(int scriptLength) {
     pthread_mutex_lock(&memoryAvailabilityDLLLock);
     int tmp = -1;
@@ -279,6 +348,14 @@ void deallocateMemoryScript(struct PCB *pcb) {
     free(pcb);
 }
 
+/**
+ * @brief Removes a PCB from the readyQueue.
+ *
+ * This function detaches the specified Process Control Block (PCB) from the ready queue and
+ * reattaches the previous and next nodes (if any) together.
+ *
+ * @param p1 A pointer to the PCB to be removed from the queue.
+ */
 void detachPCBFromQueue(struct PCB *p1) {
     // Case where p1 is at the head
     if (readyQueue.head == p1) {
@@ -307,12 +384,30 @@ void detachPCBFromQueue(struct PCB *p1) {
     p1->prev = NULL;
 }
 
+
+/**
+ * @brief Removes a PCB from the queue and deallocates associated resources.
+ *
+ * This function detaches the specified Process Control Block (PCB) from the readyQueue and 
+ * deallocates any memory resources associated with it.
+ *
+ * @param p1 A pointer to the PCB to be removed from the queue.
+ */
 void removePCBFromQueue(struct PCB *p1) {
     detachPCBFromQueue(p1);
     deallocateMemoryScript(p1);
 }
 
-// Function to load a new script in memory
+/**
+ * @brief Loads a new script into memory.
+ *
+ * This function takes a file pointer to a script file and loads its contents into the shell memory 
+ * for execution. It handles the necessary allocation and initialization of memory as 
+ * required by the script's format.
+ *
+ * @param p A pointer to the FILE object representing the script to be loaded.
+ * @return Returns 0 on success, or a negative value on failure (e.g., if the file cannot be read).
+ */
 int mem_load_script(FILE *p) {
     char line[MAX_USER_INPUT];
     int scriptLength = 0, line_idx, mem_idx;
@@ -363,6 +458,15 @@ int mem_load_script(FILE *p) {
     return 0;
 }
 
+/**
+ * @brief Switches two PCB nodes in the readyQueue DLL.
+ *
+ * This function takes two pointers to Process Control Blocks (PCBs) and
+ *  swaps place in the ReadyQueue DLL.
+ *
+ * @param p1 A pointer to the first PCB to be switched.
+ * @param p2 A pointer to the second PCB to be switched.
+ */
 void switchPCBs(struct PCB *p1, struct PCB *p2) {
     struct PCB *tmp;
     // Updating nodes around p1
@@ -419,6 +523,14 @@ void switchPCBs(struct PCB *p1, struct PCB *p2) {
     }
 }
 
+
+
+/**
+ * @brief Executes the PCBs from the ready queue.
+ *
+ * This function iterates through the ready queue of Process Control Blocks (PCBs) and 
+ * executes each PCB one after the other starting at the head (i.e., head, head->next, ..., tail).
+ */
 void executeReadyQueuePCBs() {
     int line_idx;
     struct PCB *currentPCB;
@@ -451,6 +563,14 @@ void executeReadyQueuePCBs() {
     }
 }
 
+
+/**
+ * @brief Orders PCBs in increasing order
+ *
+ * This function rearranges the readyQueue of PCBs such that the biggest processes run fist
+ *
+ * @param isRunningBackground A flag indicating whether to consider background processes (1 for true, 0 for false).
+ */
 void orderIncreasingPCBs(int isRunningBackground) {
     struct PCB *smallest;
     struct PCB *currentPCB;
@@ -484,6 +604,14 @@ void orderIncreasingPCBs(int isRunningBackground) {
     }
 }
 
+/**
+ * @brief Inserts a PCB at the start (head) of a doubly linked list.
+ *
+ * This function takes a pointer to a PCB structure and adds it to the start (head) of the 
+ * readyQueue doubly linked list.
+ *
+ * @param p1 A pointer to the PCB structure to be placed at the start (head) of the linked list.
+ */
 void placePCBHeadAtEndOfDLL() {
     struct PCB *tmp;
 
@@ -504,6 +632,15 @@ void placePCBHeadAtEndOfDLL() {
     readyQueue.tail = tmp;
 }
 
+
+/**
+ * @brief Inserts a PCB at the end (tail) of a doubly linked list.
+ *
+ * This function takes a pointer to a PCB structure and appends it to the end (tail) of the 
+ * readyQueue doubly linked list.
+ *
+ * @param p1 A pointer to the PCB structure to be placed at the end of the linked list.
+ */
 void placePCBAtEndOfDLL(struct PCB *p1) {
     int wasPlaced = 0;
     pthread_mutex_lock(&readyQueueLock);
@@ -526,6 +663,22 @@ void placePCBAtEndOfDLL(struct PCB *p1) {
     pthread_mutex_unlock(&readyQueueLock);
 }
 
+/* ============================================
+ * Section: Execute Scripts Functions
+ *
+ * This section contains functions related to 
+ * the execute scripts from the shell.
+ * ============================================ */
+
+/**
+ * @brief Executes the Round Robin (RR) scheduling policy.
+ *
+ * This function implements the Round Robin (RR) scheduling algorithm for a set of processes
+ * based on the specified line number.
+ *
+ * @param lineNumber The number of line to execute before switching processes.
+ * @return Nothing
+ */
 void runRR(int lineNumber) {
     struct PCB *currentPCB;
     int line_idx;
@@ -626,6 +779,13 @@ void runAging() {
     }
 }
 
+/**
+ * @brief Selects the scheduling strategy based on the specified policy.
+ *
+ * This function takes a scheduling policy as input and configures the readyQueue accordingly
+ *
+ * @param policy A value of type `policy_t` that represents the scheduling policy to be used. (i.e., FCSF, SJF, RR, RR30, AGING)
+ */
 void selectSchedule(policy_t policy) {
     switch (policy) {
         // Since the readyQueue for SJF was sorted in schedulerRun beforehand, it becomes the same as FCFS
@@ -645,7 +805,15 @@ void selectSchedule(policy_t policy) {
     }
 }
 
-void *workerThread(void *arg) {
+/**
+ * @brief The main function for the worker thread.
+ *
+ * This function runs in a loop, waiting for work to be available via a semaphore. 
+ * When work is signaled, it selects the scheduling policy to manage process execution. 
+ * The loop continues until a termination signal is received
+ *
+ */
+void *workerThread() {
     while (1) {
         sem_wait(&isThereWorkSem);
         selectSchedule(policyGlobal);
@@ -655,6 +823,18 @@ void *workerThread(void *arg) {
     }
 }
 
+
+/**
+ * @brief Executes the scheduling process based on the specified policy and execution modes.
+ *
+ * This function initiates the scheduling of processes according to the provided 
+ * policy. It manages whether the processes should run in the background or 
+ * concurrently, adjusting the scheduling behavior accordingly.
+ *
+ * @param policy A value of type 'policy_t' representing the scheduling policy to be applied.
+ * @param isRunningBackground An integer flag indicating if the scheduling should occur in the background. (1 if True, 0 if False)
+ * @param isRunningConcurrently An integer flag indicating if processes should run concurrently. (1 if True, 0 if False)
+ */
 void schedulerRun(policy_t policy, int isRunningBackground,
                   int isRunningConcurrently) {
     struct PCB *currentPCB, *smallest, *currentHead;
@@ -686,7 +866,13 @@ void schedulerRun(policy_t policy, int isRunningBackground,
     }
 }
 
-
+/**
+ * @brief Waits for all running worker threads to finish execution.
+ *
+ * This function sets a termination flag and signals the worker threads to exit. 
+ * It then calls 'pthread_join' for each thread, ensuring the main thread waits 
+ * for their completion before proceeding.
+ */
 void joinAllThreads() {
     if (isRunningWorkers){
         isTimeToExit = 1;

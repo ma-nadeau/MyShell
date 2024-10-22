@@ -130,9 +130,12 @@ int interpreter(char *command_args[], int args_size) {
     } else if (strcmp(command_args[0], "exec") == 0) {
         policy_t policy;
         int isRunningInBackground, isRunningConcurrently;
-
+        
+        // Determine whether to execute the command using multithreading
         isRunningConcurrently = strcmp(command_args[args_size - 1], "MT") == 0 ? 1 : 0;
+        // Check if the exec command needs to convert the remaining user input into a file and execute it
         isRunningInBackground = strcmp(command_args[args_size - 1 - isRunningConcurrently], "#") == 0 ? 1 : 0;
+        // Retrieve the policy associated with the exec command
         policy = policy_parser(command_args[args_size - 1 - isRunningConcurrently - isRunningInBackground]);
 
 
@@ -331,6 +334,20 @@ int run(char *script) {
     return errCode;
 }
 
+/**
+ * @brief Executes a list of scripts based on the given policy.
+ *
+ * This function takes an array of script names and executes them according to the specified
+ * policy. The execution can occur either in the background or concurrently, depending on the 
+ * provided flags.
+ *
+ * @param scripts An array of strings representing the scripts to be executed.
+ * @param scripts_number The number of scripts in the array.
+ * @param policy The policy governing the execution of the scripts (e.g., FCFS, SJF, RR, RR30, AGING).
+ * @param isRunningInBackground A flag indicating whether the scripts should run in the background (1 for true, 0 for false).
+ * @param isRunningConcurrently A flag indicating whether the scripts should run concurrently (1 for true, 0 for false).
+ * @return Returns non-zero value on failure.
+ */
 int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground, int isRunningConcurrently) {
     int script_idx, errCode = 0;
     FILE *p;
@@ -458,6 +475,15 @@ int custom_sort(const struct dirent **d1, const struct dirent **d2) {
     return 0;  // When names are identical
 }
 
+/**
+ * @brief Parses a policy string and converts it to a policy_t type.
+ *
+ * This function takes a string representing a policy and parses it to return 
+ * the corresponding 'policy_t' enumeration. Choices are FCFS, SJF, RR, RR30, AGING or INVALID_POLICY
+ *
+ * @param policy_str A pointer to a string representing the policy to be parsed.
+ * @return Returns the corresponding policy_t value on success, or INVALID_POLICY if parsing fails.
+ */
 policy_t policy_parser(char policy_str[]) {
     // Checking if policy is available
     if (strcmp(policy_str, "FCFS") == 0) {

@@ -68,6 +68,16 @@ int countChar(char input[], char search) {
     return count;
 }
 
+
+/**
+ * @brief Converts a single line of commands into executable statements.
+ *
+ * This function takes a string containing multiple commands separated by semicolons (';')
+ * and processes each command to execute them one by one.
+ *
+ * @param input A string containing commands separated by semicolons.
+ * @return Returns 0 on success, or a non-zero value on failure.
+ */
 int convertInputToOneLiners(char input[]) {
     int count;
     char *start = input;
