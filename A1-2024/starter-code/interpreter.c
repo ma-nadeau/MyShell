@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "shell.h"
 #include "shellmemory.h"
@@ -164,8 +165,11 @@ run SCRIPT.TXT		Executes the file SCRIPT.TXT\n ";
 
 int quit() {
     printf("Bye!\n");
-    joinAllThreads();
-    exit(0);
+    isTimeToExit = 1;
+    if (isMainThread(pthread_self())){
+        joinAllThreads();
+        exit(0);
+    }
 }
 
 int set(char *var, char *values[], int number_values) {

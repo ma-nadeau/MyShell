@@ -35,6 +35,7 @@ int isRunningWorkers;
 int isTimeToExit;
 
 sem_t isThereWorkSem;
+sem_t finishedWork[WORKERS_NUMBER];
 
 pthread_mutex_t readyQueueLock;
 pthread_mutex_t memoryAvailabilityDLLLock;
@@ -66,6 +67,9 @@ void scheduler_init() {
 
     isRunningWorkers = 0;
     sem_init(&isThereWorkSem, 0, 0);
+    for(int i = 0; i < WORKERS_NUMBER; i++){
+        sem_init(&finishedWork[i], 0, 0);
+    }
     policyGlobal = INVALID_POLICY;
     isRunningBackgroundGlobal = 0;
     isTimeToExit = 0;
@@ -637,11 +641,14 @@ void selectSchedule(policy_t policy) {
  * The loop continues until a termination signal is received
  *
  */
-void *workerThread() {
+void *workerThread(void *workerID) {
     while (1) {
         sem_wait(&isThereWorkSem);
         selectSchedule(policyGlobal);
+        sem_post(&finishedWork[*(int *)workerID]);
+
         if (isTimeToExit) {
+            free(workerID);
             pthread_exit(NULL);
         }
     }
@@ -670,7 +677,9 @@ void schedulerRun(policy_t policy, int isRunningBackground,
 
     if (isRunningConcurrently && !isRunningWorkers) {
         for (int i = 0; i < WORKERS_NUMBER; i++) {
-            pthread_create(&workers[i], NULL, workerThread, NULL);
+            int *workerId = (int *) malloc(sizeof(int));
+            *workerId = i;
+            pthread_create(&workers[i], NULL, workerThread, workerId);
         }
         isRunningWorkers = 1;
     }
@@ -684,6 +693,17 @@ void schedulerRun(policy_t policy, int isRunningBackground,
             for (int i = 0; i < WORKERS_NUMBER; i++) {
                 sem_post(&isThereWorkSem);
             }
+        }
+
+        // Wait for the worker threads
+        for(int i = 0; i < WORKERS_NUMBER; i++){
+            sem_wait(&finishedWork[i]);
+        }
+
+        // Check if quit called in threads
+        if (isTimeToExit) {
+            joinAllThreads();
+            exit(0);
         }
     } else {
         selectSchedule(policy);
@@ -707,4 +727,14 @@ void joinAllThreads() {
             pthread_join(workers[i], NULL);
         }
     }
+}
+
+int isMainThread(pthread_t runningPthread) {
+    for(int i = 0; i < WORKERS_NUMBER; i++){
+        if(pthread_equal(runningPthread, workers[i])){
+            return 0;
+        }
+    }
+
+    return 1;
 }
