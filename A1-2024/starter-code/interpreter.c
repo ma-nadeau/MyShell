@@ -8,6 +8,7 @@
 
 #include "shell.h"
 #include "shellmemory.h"
+#include "scheduler.h"
 
 // Max arg size for a single command (name of the command inclusive)
 int MAX_ARGS_SIZE = 7;

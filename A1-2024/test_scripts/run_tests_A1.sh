@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-testdir="$(pwd)/test-cases"
+testdir="$(pwd)/../test-cases"
 
 if [ -n "$1" ]; then
   mkdir tmp
@@ -10,7 +10,7 @@ if [ -n "$1" ]; then
   rm -r tmp
 else
 
-for testname in $(cat test-names); do
+for testname in $(cat test-names-A1); do
   mkdir tmp
   cd tmp
   ../starter-code/mysh < "$testdir/$testname.txt" > output

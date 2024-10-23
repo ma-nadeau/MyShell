@@ -1,0 +1,2 @@
+exec ../../A2-2024/test-cases/P_longP1 ../../A2-2024/test-cases/P_longP2 ../../A2-2024/test-cases/P_longP3 RR MT
+quit

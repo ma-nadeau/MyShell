@@ -7,6 +7,7 @@
 
 #include "interpreter.h"
 #include "shellmemory.h"
+#include "scheduler.h"
 
 int parseInput(char ui[]);
 int convertInputToOneLiners(char input[]);
@@ -25,8 +26,11 @@ int main(int argc, char *argv[]) {
         userInput[i] = '\0';
     }
 
-    // init shell memory
+    // init shell memory array and concurrency variable
+    // init scheduler scripts memory array concurrency variables
     mem_init();
+    scheduler_init();
+
     while (1) {
         // In batch mode, check if eof is reached to switch back to interactive
         // mode
