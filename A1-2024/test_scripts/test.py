@@ -11,6 +11,7 @@ RED = "\033[0;31m"
 GREEN = "\033[0;32m"
 CYAN = "\033[1;36m"
 NC = "\033[0m"
+newline = '\n'
 
 
 def count_similarity(a: Counter, b: Counter):
@@ -72,13 +73,13 @@ def run_test(
                 break
             diff = "(MULTITHREAD DIFF)"
             if a_extra:
-                diff += f"\nExtra lines from actual output:\n{"\n".join(a_extra)}"
+                diff += f"{newline}Extra lines from actual output:{newline}{newline.join(a_extra)}"
             if b_extra:
-                diff += f"\nExtra lines from expected output:\n{"\n".join(b_extra)}"
+                diff += f"{newline}Extra lines from expected output:{newline}{newline.join(b_extra)}"
     if passed:
         print(f"{GREEN} Passed")
     else:
-        print(f"{RED} Failed\n---Diff---{NC}")
+        print(f"{RED} Failed{newline}---Diff---{NC}")
         print(diff)
         print(f"{RED}---End diff---{NC}")
 
