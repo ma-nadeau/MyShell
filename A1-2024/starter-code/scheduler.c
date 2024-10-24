@@ -212,6 +212,20 @@ void detachPCBFromQueue(struct PCB *p1) {
     p1->prev = NULL;
 }
 
+struct PCB *popHeadFromPCBQueue() {
+    struct PCB *rv;
+
+    pthread_mutex_lock(&readyQueueLock);
+        if (readyQueue.head){
+            rv = readyQueue.head;
+            detachPCBFromQueue(readyQueue.head);
+        } else {
+            rv = NULL;
+        }
+    pthread_mutex_unlock(&readyQueueLock);
+
+    return rv;
+}
 
 /**
  * @brief Removes a PCB from the queue and deallocates associated resources.
@@ -273,6 +287,7 @@ int mem_load_script(FILE *p) {
     newPCB->programCounter = mem_idx;
     newPCB->next = NULL;
 
+    pthread_mutex_lock(&readyQueueLock);
     if (readyQueue.tail) {
         readyQueue.tail->next = newPCB;
         newPCB->prev = readyQueue.tail;
@@ -282,6 +297,7 @@ int mem_load_script(FILE *p) {
         readyQueue.head = readyQueue.tail;
         readyQueue.head->prev = NULL;
     }
+    pthread_mutex_unlock(&readyQueueLock);
 
     return 0;
 }
@@ -297,6 +313,8 @@ int mem_load_script(FILE *p) {
  */
 void switchPCBs(struct PCB *p1, struct PCB *p2) {
     struct PCB *tmp;
+
+    pthread_mutex_lock(&readyQueueLock);
     // Updating nodes around p1
     if (p1->prev && p1->prev != p2) {
         p1->prev->next = p2;
@@ -349,6 +367,8 @@ void switchPCBs(struct PCB *p1, struct PCB *p2) {
     } else if (p2 == readyQueue.tail) {
         readyQueue.tail = p1;
     }
+
+    pthread_mutex_unlock(&readyQueueLock);
 }
 
 
@@ -363,23 +383,7 @@ void executeReadyQueuePCBs() {
     int line_idx;
     struct PCB *currentPCB;
 
-    while (readyQueue.head) {
-
-        // Check if there are any processes left
-        // Pick the first one if so
-        pthread_mutex_lock(&readyQueueLock);
-        if (readyQueue.head){
-            currentPCB = readyQueue.head;
-            detachPCBFromQueue(readyQueue.head);
-        } else {
-            currentPCB = NULL;
-        }
-        pthread_mutex_unlock(&readyQueueLock);
-
-        // Check that by the time the lock was acquired, head was not null
-        if (!currentPCB){
-            break;
-        }
+    while ((currentPCB = popHeadFromPCBQueue())) {
 
         // Execute all lines of code
         for (line_idx = currentPCB->programCounter;
@@ -511,23 +515,8 @@ void runRR(int lineNumber) {
     struct PCB *currentPCB;
     int line_idx;
     int programCounterTmp;
-    while (readyQueue.head) {
-        
-        // Check if there are any processes left
-        // Pick the first one if so
-        pthread_mutex_lock(&readyQueueLock);
-        if (readyQueue.head){
-            currentPCB = readyQueue.head;
-            detachPCBFromQueue(readyQueue.head);
-        } else {
-            currentPCB = NULL;
-        }
-        pthread_mutex_unlock(&readyQueueLock);
 
-        // Check that by the time the lock was acquired, head was not null
-        if (!currentPCB){
-            break;
-        }
+    while ((currentPCB = popHeadFromPCBQueue())) {
 
         // Execute lineNumber lines of code
         programCounterTmp = currentPCB->programCounter;
