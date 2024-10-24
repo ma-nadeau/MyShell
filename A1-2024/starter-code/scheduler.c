@@ -46,6 +46,11 @@ int isRunningBackgroundGlobal;
 char *shellmemoryCode[MEM_SIZE];
 struct availableMemory *availableMemoryHead;
 
+
+
+/**
+ * @brief This function intializes the ready queue.
+ */
 void scheduler_init() {
     // Initialize variable and code shellmemory
     int mem_idx, val_idx;
@@ -116,6 +121,16 @@ int allocateMemoryScript(int scriptLength) {
     return tmp;
 }
 
+/**
+ * @brief Adds back the memory space previously occupied by a script once it is freed.
+ *
+ * This function updates the available memory by marking the specified block of memory 
+ * as free, allowing it to be reused for future allocations.
+ *
+ * @param memoryStartIdx The index in memory where the previously allocated space begins.
+ * @param lengthCode The length of the memory block to be freed.
+ * @return void This function does not return a value.
+ */
 void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
     pthread_mutex_lock(&memoryAvailabilityDLLLock);
     struct availableMemory *currentMemoryBlock = availableMemoryHead;
@@ -163,6 +178,15 @@ void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
     pthread_mutex_unlock(&memoryAvailabilityDLLLock);
 }
 
+/**
+ * @brief Deallocates the memory occupied by a script associated with the given PCB.
+ *
+ * This function frees the memory that was allocated for the script linked to 
+ * the specified process control block (PCB). 
+ *
+ * @param pcb A pointer to the PCB structure that contains the script whose memory is to be deallocated.
+ * @return void This function does not return a value.
+ */
 void deallocateMemoryScript(struct PCB *pcb) {
     int line_idx;
 
@@ -212,6 +236,15 @@ void detachPCBFromQueue(struct PCB *p1) {
     p1->prev = NULL;
 }
 
+/**
+ * @brief Removes and returns the head process control block (PCB) from the queue.
+ *
+ * This function retrieves and removes the first PCB from the PCB queue. 
+ * If the queue is empty, it returns NULL.
+ *
+ * @return A pointer to the PCB that was removed from the head of the queue, 
+ *         or NULL if the queue is empty.
+ */
 struct PCB *popHeadFromPCBQueue() {
     struct PCB *rv;
 
@@ -536,6 +569,13 @@ void runRR(int lineNumber) {
     }
 }
 
+/**
+ * @brief Executes the Aging scheduling policy.
+ *
+ * This function implements the Aging scheduling algorithm for the process in the readyQueue
+ *
+ * @return Nothing
+ */
 void runAging() {
     struct PCB *currentPCB, *smallest, *currentHead;
     int line_idx, programCounterTmp;

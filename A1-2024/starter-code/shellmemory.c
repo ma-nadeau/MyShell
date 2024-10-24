@@ -53,12 +53,12 @@ int match(char *model, char *var) {
 
 
 /**
- * @brief Initializes the memory for shell operations.
+ * @brief Initializes the shell memory.
  *
  * This function sets up the necessary memory structures and resources required 
- * for the shell's operation. It initializes the shell memory, the ready queue.
+ * for the shell's operation.
  *
- * */
+ */
 void mem_init() {
     // Initialize variable and code shellmemory
     int mem_idx, val_idx;
