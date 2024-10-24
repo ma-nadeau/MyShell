@@ -165,7 +165,10 @@ run SCRIPT.TXT		Executes the file SCRIPT.TXT\n ";
 
 int quit() {
     printf("Bye!\n");
+    pthread_mutex_lock(&finishedWorkLock);
     startExitProcedure = 1;
+    pthread_cond_signal(&finishedWorkCond);
+    pthread_mutex_unlock(&finishedWorkLock);
     if (isMainThread(pthread_self())){
         joinAllThreads();
         exit(0);

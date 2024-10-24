@@ -12,6 +12,9 @@ typedef enum policy_t {
 } policy_t;
 
 extern int startExitProcedure;
+extern pthread_mutex_t finishedWorkLock;
+extern pthread_cond_t finishedWorkCond;
+
 
 void scheduler_init();
 int mem_load_script(FILE *p);

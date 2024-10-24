@@ -35,14 +35,16 @@ int isRunningWorkers;
 int isThereWorkToDo;
 int isTimeToExit;
 int startExitProcedure;
+int finishedWork;
 
 pthread_cond_t isThereWorkToDoCond;
-sem_t isThereWorkSem;
-sem_t finishedWork[WORKERS_NUMBER];
+pthread_cond_t finishedWorkCond;
 
 pthread_mutex_t readyQueueLock;
 pthread_mutex_t memoryAvailabilityDLLLock;
+
 pthread_mutex_t isThereWorkToDoLock;
+pthread_mutex_t finishedWorkLock;
 
 policy_t policyGlobal;
 
@@ -74,19 +76,18 @@ void scheduler_init() {
     availableMemoryHead->prev = NULL;
 
     isRunningWorkers = 0;
-    sem_init(&isThereWorkSem, 0, 0);
-    for(int i = 0; i < WORKERS_NUMBER; i++){
-        sem_init(&finishedWork[i], 0, 0);
-    }
     policyGlobal = INVALID_POLICY;
     isTimeToExit = 0;
-    isThereWorkToDo = 2;
+    isThereWorkToDo = 0;
     startExitProcedure = 0;
+    finishedWork = 0;
 
     pthread_mutex_init(&readyQueueLock, NULL);
     pthread_mutex_init(&memoryAvailabilityDLLLock, NULL);
     pthread_mutex_init(&isThereWorkToDoLock, NULL);
     pthread_cond_init(&isThereWorkToDoCond, NULL);
+    pthread_mutex_init(&finishedWorkLock, NULL);
+    pthread_cond_init(&finishedWorkCond, NULL);
 }
 
 /**
@@ -699,7 +700,11 @@ void *workerThread(void *workerID) {
             pthread_exit(NULL);
         }
         selectSchedule(workerPolicy);
-        sem_post(&finishedWork[*(int *)workerID]);
+        
+        pthread_mutex_lock(&finishedWorkLock);
+        finishedWork++;
+        pthread_cond_signal(&finishedWorkCond);
+        pthread_mutex_unlock(&finishedWorkLock);
     }
 }
 
@@ -718,7 +723,7 @@ void *workerThread(void *workerID) {
 void schedulerRun(policy_t policy, int isRunningBackground,
                   int isRunningConcurrently) {
     struct PCB *currentPCB, *smallest, *currentHead;
-    int line_idx, programCounterTmp;
+    int line_idx, programCounterTmp, startMainExitProcedure = 0;
 
     if (policy == SJF || policy == AGING){
         orderIncreasingPCBs(isRunningBackground);
@@ -741,12 +746,22 @@ void schedulerRun(policy_t policy, int isRunningBackground,
         pthread_mutex_unlock(&isThereWorkToDoLock);
 
         // Wait for the worker threads
-        for(int i = 0; i < WORKERS_NUMBER; i++){
-            sem_wait(&finishedWork[i]);
+        pthread_mutex_lock(&finishedWorkLock);
+        while (!startExitProcedure && finishedWork < 2){
+            pthread_cond_wait(&finishedWorkCond, &finishedWorkLock);
         }
 
+        if (finishedWork >= 2) {
+            finishedWork = 0;
+        }
+
+        if(startExitProcedure) {
+            startMainExitProcedure = 1;
+        }
+        pthread_mutex_unlock(&finishedWorkLock);
+
         // Check if quit called in threads
-        if (startExitProcedure) {
+        if (startMainExitProcedure) {
             joinAllThreads();
             exit(0);
         }
