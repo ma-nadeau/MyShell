@@ -112,9 +112,19 @@ int allocateMemoryScript(int scriptLength) {
             blockPointer->memoryStartIdx += scriptLength;
             blockPointer->length -= scriptLength;
             // Check if the block is now empty
-            if (blockPointer->length == 0 &&
-                blockPointer != availableMemoryHead) {
-                blockPointer->prev->next = blockPointer->next;
+            if (blockPointer->length == 0) {
+                if(blockPointer == availableMemoryHead) {
+                    if (!availableMemoryHead->next){
+                        break;
+                    }
+                    availableMemoryHead = availableMemoryHead->next;
+                    availableMemoryHead->prev = NULL;
+                } else {
+                    blockPointer->prev->next = blockPointer->next;
+                    if (blockPointer->next) {
+                        blockPointer->next->prev = blockPointer->prev;
+                    }
+                }
                 free(blockPointer);
             }
             break;
@@ -157,6 +167,9 @@ void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
                 tmp->length = lengthCode;
                 tmp->next = currentMemoryBlock;
                 tmp->prev = currentMemoryBlock->prev;
+                if (currentMemoryBlock->prev){
+                    currentMemoryBlock->prev->next = tmp;
+                }
                 currentMemoryBlock->prev = tmp;
                 if (availableMemoryHead == currentMemoryBlock) {
                     availableMemoryHead = tmp;
