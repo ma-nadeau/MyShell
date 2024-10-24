@@ -165,7 +165,7 @@ run SCRIPT.TXT		Executes the file SCRIPT.TXT\n ";
 
 int quit() {
     printf("Bye!\n");
-    isTimeToExit = 1;
+    startExitProcedure = 1;
     if (isMainThread(pthread_self())){
         joinAllThreads();
         exit(0);

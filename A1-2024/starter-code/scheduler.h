@@ -11,7 +11,7 @@ typedef enum policy_t {
     INVALID_POLICY
 } policy_t;
 
-extern int isTimeToExit;
+extern int startExitProcedure;
 
 void scheduler_init();
 int mem_load_script(FILE *p);

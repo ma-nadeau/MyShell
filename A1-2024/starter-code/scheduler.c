@@ -32,16 +32,19 @@ struct availableMemory {
 
 pthread_t workers[WORKERS_NUMBER];
 int isRunningWorkers;
+int isThereWorkToDo;
 int isTimeToExit;
+int startExitProcedure;
 
+pthread_cond_t isThereWorkToDoCond;
 sem_t isThereWorkSem;
 sem_t finishedWork[WORKERS_NUMBER];
 
 pthread_mutex_t readyQueueLock;
 pthread_mutex_t memoryAvailabilityDLLLock;
+pthread_mutex_t isThereWorkToDoLock;
 
 policy_t policyGlobal;
-int isRunningBackgroundGlobal;
 
 char *shellmemoryCode[MEM_SIZE];
 struct availableMemory *availableMemoryHead;
@@ -76,12 +79,14 @@ void scheduler_init() {
         sem_init(&finishedWork[i], 0, 0);
     }
     policyGlobal = INVALID_POLICY;
-    isRunningBackgroundGlobal = 0;
     isTimeToExit = 0;
+    isThereWorkToDo = 2;
+    startExitProcedure = 0;
 
     pthread_mutex_init(&readyQueueLock, NULL);
     pthread_mutex_init(&memoryAvailabilityDLLLock, NULL);
-
+    pthread_mutex_init(&isThereWorkToDoLock, NULL);
+    pthread_cond_init(&isThereWorkToDoCond, NULL);
 }
 
 /**
@@ -671,15 +676,30 @@ void selectSchedule(policy_t policy) {
  *
  */
 void *workerThread(void *workerID) {
-    while (1) {
-        sem_wait(&isThereWorkSem);
-        selectSchedule(policyGlobal);
-        sem_post(&finishedWork[*(int *)workerID]);
+    int startWorkerExitProcedure = 0;
+    policy_t workerPolicy;
 
-        if (isTimeToExit) {
+    while (1) {
+        pthread_mutex_lock(&isThereWorkToDoLock);
+        while (!isTimeToExit && !isThereWorkToDo){
+            pthread_cond_wait(&isThereWorkToDoCond, &isThereWorkToDoLock);
+        }
+
+        if(isThereWorkToDo){
+            isThereWorkToDo--;
+            workerPolicy = policyGlobal;
+        }
+        if (isTimeToExit){
+            startWorkerExitProcedure = 1;
+        }
+        pthread_mutex_unlock(&isThereWorkToDoLock);
+
+        if (startWorkerExitProcedure) {
             free(workerID);
             pthread_exit(NULL);
         }
+        selectSchedule(workerPolicy);
+        sem_post(&finishedWork[*(int *)workerID]);
     }
 }
 
@@ -714,15 +734,11 @@ void schedulerRun(policy_t policy, int isRunningBackground,
     }
 
     if (isRunningConcurrently) {
+        pthread_mutex_lock(&isThereWorkToDoLock);
         policyGlobal = policy;
-        if (isRunningBackground) {
-            isRunningBackgroundGlobal = isRunningBackground;
-        }
-        if (readyQueue.head) {
-            for (int i = 0; i < WORKERS_NUMBER; i++) {
-                sem_post(&isThereWorkSem);
-            }
-        }
+        isThereWorkToDo = 2;
+        pthread_cond_broadcast(&isThereWorkToDoCond);
+        pthread_mutex_unlock(&isThereWorkToDoLock);
 
         // Wait for the worker threads
         for(int i = 0; i < WORKERS_NUMBER; i++){
@@ -730,7 +746,7 @@ void schedulerRun(policy_t policy, int isRunningBackground,
         }
 
         // Check if quit called in threads
-        if (isTimeToExit) {
+        if (startExitProcedure) {
             joinAllThreads();
             exit(0);
         }
@@ -748,10 +764,11 @@ void schedulerRun(policy_t policy, int isRunningBackground,
  */
 void joinAllThreads() {
     if (isRunningWorkers){
+        pthread_mutex_lock(&isThereWorkToDoLock);
         isTimeToExit = 1;
-        for (int i = 0; i < WORKERS_NUMBER; i++) {
-            sem_post(&isThereWorkSem);
-        }
+        pthread_cond_broadcast(&isThereWorkToDoCond);
+        pthread_mutex_unlock(&isThereWorkToDoLock);
+        
         for (int i = 0; i < WORKERS_NUMBER; i++) {
             pthread_join(workers[i], NULL);
         }
