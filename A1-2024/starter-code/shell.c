@@ -6,9 +6,9 @@
 #include <unistd.h>
 
 #include "interpreter.h"
-#include "shellmemory.h"
 #include "scheduler.h"
 #include "scriptsmemory.h"
+#include "shellmemory.h"
 
 /*** FUNCTION SIGNATURES ***/
 
@@ -17,7 +17,14 @@ int convertInputToOneLiners(char input[]);
 int wordEnding(char c);
 int countChar(char input[], char search);
 
-// Start of everything
+/**
+ * Start of everything
+ *
+ * @param argc The number of command-line arguments passed to the program.
+ * @param argv An array of pointers to the command-line arguments.
+ *
+ * @return Returns an integer status code, 0 for success
+ */
 int main(int argc, char *argv[]) {
     printf("Shell version 1.3 created September 2024\n\n");
     // help();  //Not printing the help text anymore at start of shell
@@ -33,7 +40,8 @@ int main(int argc, char *argv[]) {
 
     // initialize shell memory array and associated concurrency variable
     mem_init();
-    // initialize scheduler scripts memory array and associated concurrency variables
+    // initialize scheduler scripts memory array and associated concurrency
+    // variables
     scheduler_init();
     // initialize memory for scripts and associated concurrency variables
     scripts_memory_init();
@@ -61,10 +69,9 @@ int main(int argc, char *argv[]) {
 /*** PARSING FUNCTIONS ***/
 
 /**
- * @brief Converts a single line of commands into executable statements.
- *
- * This function takes a string containing multiple commands separated by semicolons (';')
- * and processes each command to execute them one by one.
+ * Converts a single line of commands into executable statements.
+ * This function takes a string containing multiple commands separated by
+ * semicolons (';') and processes each command to execute them one by one.
  *
  * @param input A string containing commands separated by semicolons.
  * @return Returns 0 on success, or a non-zero value on failure.
@@ -102,11 +109,9 @@ int convertInputToOneLiners(char input[]) {
 }
 
 /**
- * @brief Executes a single command
- * 
- * The function takes as input a string containing the command and associated arguments
- * and it executes it.
- * 
+ * The function takes as input a string containing the command and associated
+ * arguments and it executes it.
+ *
  * @param input A string containing the command and arguments.
  * @return Returns 0 on success, or a non-zero value on failure.
  */
@@ -143,13 +148,21 @@ int parseInput(char inp[]) {
 
 /**
  * Predicate determining whether a char is a word-ending character
+ *
+ * @param c The character to be checked.
+ *
+ * @return Returns 1 (true) if the character is a word-ending character,
+ * otherwise returns 0 (false)
  */
-int wordEnding(char c) {
-    return c == '\0' || c == '\n' || c == ' ';
-}
+int wordEnding(char c) { return c == '\0' || c == '\n' || c == ' '; }
 
 /**
  * Function that determines how many "search" chars are in the string "input"
+ *
+ * @param input A null-terminated string in which to count occurrences of the character.
+ * @param search The character to search for within the input string.
+ *
+ * @return Returns the number of times the specified character appears in the string.
  */
 int countChar(char input[], char search) {
     int count = 0;
