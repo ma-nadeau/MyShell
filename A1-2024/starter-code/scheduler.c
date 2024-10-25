@@ -6,7 +6,7 @@
 #include "shellmemory.h"
 #include "shell.h"
 #include "scheduler.h"
-
+#include "scriptsmemory.h"
 
 struct PCB {
     int pid;
@@ -23,13 +23,6 @@ struct PCBQueue {
     struct PCB *tail;
 } readyQueue;
 
-struct availableMemory {
-    int memoryStartIdx;
-    int length;
-    struct availableMemory *next;
-    struct availableMemory *prev;
-};
-
 pthread_t workers[WORKERS_NUMBER];
 int isRunningWorkers;
 int isThereWorkToDo;
@@ -41,39 +34,19 @@ pthread_cond_t isThereWorkToDoCond;
 pthread_cond_t finishedWorkCond;
 
 pthread_mutex_t readyQueueLock;
-pthread_mutex_t memoryAvailabilityDLLLock;
 
 pthread_mutex_t isThereWorkToDoLock;
 pthread_mutex_t finishedWorkLock;
 
 policy_t policyGlobal;
 
-char *shellmemoryCode[MEM_SIZE];
-struct availableMemory *availableMemoryHead;
-
-
-
 /**
  * @brief This function intializes the ready queue.
  */
-void scheduler_init() {
-    // Initialize variable and code shellmemory
-    int mem_idx, val_idx;
-    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
-        shellmemoryCode[mem_idx] = NULL;
-    }
-    
+void scheduler_init() {    
     // Initialize readyQueue
     readyQueue.head = NULL;
     readyQueue.tail = NULL;
-
-    // Initialize available memory
-    availableMemoryHead =
-        (struct availableMemory *)malloc(sizeof(struct availableMemory));
-    availableMemoryHead->memoryStartIdx = 0;
-    availableMemoryHead->length = MEM_SIZE;
-    availableMemoryHead->next = NULL;
-    availableMemoryHead->prev = NULL;
 
     isRunningWorkers = 0;
     policyGlobal = INVALID_POLICY;
@@ -83,7 +56,6 @@ void scheduler_init() {
     finishedWork = 0;
 
     pthread_mutex_init(&readyQueueLock, NULL);
-    pthread_mutex_init(&memoryAvailabilityDLLLock, NULL);
     pthread_mutex_init(&isThereWorkToDoLock, NULL);
     pthread_cond_init(&isThereWorkToDoCond, NULL);
     pthread_mutex_init(&finishedWorkLock, NULL);
@@ -92,113 +64,6 @@ void scheduler_init() {
 
 
 void insertPCBFromTailSJF(struct PCB *pcb);
-
-/**
- * @brief Allocates memory for a script.
- *
- * This function allocates a block of memory of the specified length to hold a script.
- *
- * @param scriptLength The length of the script for which memory needs to be allocated (i.e., the number of lines).
- * @return Returns the starting index (i.e., the address in memory) on success, or -1 if an error occurs.
- */
-int allocateMemoryScript(int scriptLength) {
-    pthread_mutex_lock(&memoryAvailabilityDLLLock);
-    int tmp = -1;
-    // Fetch available memory list head
-    struct availableMemory *blockPointer = availableMemoryHead;
-    // Loop over available memory to find enough space
-    while (blockPointer) {
-        // Enough space found
-        if (scriptLength <= blockPointer->length) {
-            // Update the available memory block
-            tmp = blockPointer->memoryStartIdx;
-            blockPointer->memoryStartIdx += scriptLength;
-            blockPointer->length -= scriptLength;
-            // Check if the block is now empty
-            if (blockPointer->length == 0) {
-                if(blockPointer == availableMemoryHead) {
-                    if (!availableMemoryHead->next){
-                        break;
-                    }
-                    availableMemoryHead = availableMemoryHead->next;
-                    availableMemoryHead->prev = NULL;
-                } else {
-                    blockPointer->prev->next = blockPointer->next;
-                    if (blockPointer->next) {
-                        blockPointer->next->prev = blockPointer->prev;
-                    }
-                }
-                free(blockPointer);
-            }
-            break;
-        }
-        blockPointer = blockPointer->next;
-    }
-
-    // If we end up here it means that no memory was available for the script
-    pthread_mutex_unlock(&memoryAvailabilityDLLLock);
-    return tmp;
-}
-
-/**
- * @brief Adds back the memory space previously occupied by a script once it is freed.
- *
- * This function updates the available memory by marking the specified block of memory 
- * as free, allowing it to be reused for future allocations.
- *
- * @param memoryStartIdx The index in memory where the previously allocated space begins.
- * @param lengthCode The length of the memory block to be freed.
- * @return void This function does not return a value.
- */
-void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
-    pthread_mutex_lock(&memoryAvailabilityDLLLock);
-    struct availableMemory *currentMemoryBlock = availableMemoryHead;
-
-    // Looping through the DLL
-    while (currentMemoryBlock) {
-        if (memoryStartIdx < currentMemoryBlock->memoryStartIdx) {
-            // Check to see if the memory freed is contiguous with the memory
-            // afterwards
-            if (memoryStartIdx + lengthCode ==
-                currentMemoryBlock->memoryStartIdx) {
-                currentMemoryBlock->memoryStartIdx -= lengthCode;
-                currentMemoryBlock->length += lengthCode;
-            } else {
-                struct availableMemory *tmp = (struct availableMemory *)malloc(
-                    sizeof(struct availableMemory));
-                tmp->memoryStartIdx = memoryStartIdx;
-                tmp->length = lengthCode;
-                tmp->next = currentMemoryBlock;
-                tmp->prev = currentMemoryBlock->prev;
-                if (currentMemoryBlock->prev){
-                    currentMemoryBlock->prev->next = tmp;
-                }
-                currentMemoryBlock->prev = tmp;
-                if (availableMemoryHead == currentMemoryBlock) {
-                    availableMemoryHead = tmp;
-                }
-                currentMemoryBlock = tmp;
-            }
-
-            // Check to see if the memory freed is contiguous with the memory
-            // before
-            if (currentMemoryBlock->prev &&
-                currentMemoryBlock->prev->memoryStartIdx +
-                        currentMemoryBlock->prev->length ==
-                    currentMemoryBlock->memoryStartIdx) {
-                currentMemoryBlock->prev->length += currentMemoryBlock->length;
-                currentMemoryBlock->prev->next = currentMemoryBlock->next;
-                if (currentMemoryBlock->next) {
-                    currentMemoryBlock->next->prev = currentMemoryBlock->prev;
-                }
-                free(currentMemoryBlock);
-            }
-            break;
-        }
-        currentMemoryBlock = currentMemoryBlock->next;
-    }
-    pthread_mutex_unlock(&memoryAvailabilityDLLLock);
-}
 
 /**
  * @brief Deallocates the memory occupied by a script associated with the given PCB.
@@ -215,7 +80,7 @@ void deallocateMemoryScript(struct PCB *pcb) {
     // Free the code in shell memory
     for (line_idx = pcb->memoryStartIdx;
          line_idx < pcb->memoryStartIdx + pcb->lengthCode; line_idx++) {
-        free(shellmemoryCode[line_idx]);
+        free(fetchInstruction(line_idx));
     }
 
     addMemoryAvailability(pcb->memoryStartIdx, pcb->lengthCode);
@@ -330,7 +195,7 @@ int mem_load_script(FILE *p, policy_t policy) {
     mem_idx = allocateMemoryScript(scriptLength);
 
     for (line_idx = mem_idx; line_idx < mem_idx + scriptLength; line_idx++) {
-        shellmemoryCode[line_idx] = scriptLines[line_idx - mem_idx];
+        updateInstruction(line_idx, scriptLines[line_idx - mem_idx]);
     }
 
     // Initialize new PCB
@@ -459,7 +324,7 @@ void executeReadyQueuePCBs() {
         for (line_idx = currentPCB->programCounter;
              line_idx < currentPCB->memoryStartIdx + currentPCB->lengthCode;
              line_idx++, currentPCB->programCounter++) {
-            convertInputToOneLiners(shellmemoryCode[line_idx]);
+            convertInputToOneLiners(fetchInstruction(line_idx));
         }
         deallocateMemoryScript(currentPCB);
     }
@@ -575,7 +440,7 @@ void runRR(int lineNumber) {
              line_idx < currentPCB->memoryStartIdx + currentPCB->lengthCode &&
              line_idx < programCounterTmp + lineNumber;
              line_idx++, currentPCB->programCounter++) {
-            convertInputToOneLiners(shellmemoryCode[line_idx]);
+            convertInputToOneLiners(fetchInstruction(line_idx));
         }
         // Check if process has finished running
         if (currentPCB->programCounter ==
@@ -603,7 +468,7 @@ void runAging() {
 
         // Time slice
         convertInputToOneLiners(
-            shellmemoryCode[currentPCB->programCounter]);
+            fetchInstruction(currentPCB->programCounter));
         currentPCB->programCounter++;
 
         // Aging all processes

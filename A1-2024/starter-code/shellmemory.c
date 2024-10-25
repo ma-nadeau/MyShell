@@ -17,40 +17,7 @@ pthread_mutex_t memoryVariableArrayLock;
 
 struct memory_struct shellmemory[MEM_SIZE];
 
-/* ============================================
- * Section: Helper Functions
- * ============================================ */
-
-/**
- * @brief Compares a model string with a variable string for an exact match.
- *
- * This function checks if the provided variable string matches the specified 
- * model string character by character.
- *
- * @param model A pointer to the model string to be compared against.
- * @param var A pointer to the variable string to be matched.
- * @return Returns 1 if the strings match exactly, 0 if they do not match, 
- *         or -1 if either string is NULL or if the lengths differ.
- */
-int match(char *model, char *var) {
-    int i, len = strlen(var), matchCount = 0;
-    for (i = 0; i < len; i++) {
-        if (model[i] == var[i]) matchCount++;
-    }
-    if (matchCount == len) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-/* ============================================
- * Section: Shell Memory Functions
- *
- * This section contains functions related to 
- * memory management in the shell.
- * ============================================ */
-
+/** SHELL MEMORY FUNCTIONS */
 
 /**
  * @brief Initializes the shell memory.
@@ -68,7 +35,7 @@ void mem_init() {
             shellmemory[mem_idx].value[val_idx] = NULL;
         }
     }
-
+    
     pthread_mutex_init(&memoryVariableArrayLock, NULL);
 }
 
@@ -96,7 +63,7 @@ void mem_clear_value(int mem_idx) {
  *
  * This function takes a variable name and an array of values, associating the values 
  * with the given variable name in memory. The number of values is specified by the 
- * `number_values` parameter.
+ * 'number_values' parameter.
  *
  * @param var_in A pointer to a string representing the variable name (key) to be set.
  * @param values_in An array of strings representing the values to be associated with the variable.

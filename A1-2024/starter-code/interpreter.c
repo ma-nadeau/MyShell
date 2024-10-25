@@ -25,34 +25,13 @@ typedef enum commandError_t {
     COMMAND_ERROR_NON_ALPHANUM
 } commandError_t;
 
+// Global variable that indicates whether an exec command with '#' was run
+// in which case the subsequent exec commands would only load scripts in the readyQueue
 int execOnlyLoading = 0;
 
-int badcommand(commandError_t errorCode) {
-    switch (errorCode) {
-        case COMMAND_ERROR_BAD_COMMAND:
-            printf("Unknown Command\n");
-            break;
-        case COMMAND_ERROR_TOO_MANY_TOKENS:
-            printf("Bad command: Too many tokens\n");
-            break;
-        case COMMAND_ERROR_FILE_INEXISTENT:
-            printf("Bad command: File not found\n");
-            break;
-        case COMMAND_ERROR_MKDIR:
-            printf("Bad command: my_mkdir\n");
-            break;
-        case COMMAND_ERROR_CD:
-            printf("Bad command: my_cd\n");
-            break;
-        default:
-            break;
-    }
+/*** FUNCTION SIGNATURES ***/
 
-    return (int)errorCode;
-}
-
-/*** Function signatures ***/
-
+int badcommand(commandError_t errorCode);
 int help();
 int quit();
 int set(char *var, char *values[], int number_values);
@@ -70,10 +49,17 @@ int is_alphanumeric_list(char **lst, int len_lst);
 policy_t policy_parser(char policy_str[]);
 int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground, int isRunningConcurrently);
 
-// Interpret commands and their arguments
+/**
+ * Function that interprets commands and their arguments
+ * 
+ * @param command_args List of command arguments
+ * @param args_size Total number of command arguments
+ */
 int interpreter(char *command_args[], int args_size) {
-    int i;
+    int i, isRunningInBackground, isRunningConcurrently;
+    policy_t policy;
 
+    // Make sure that the number of arguments isn't out of bounds
     if (args_size < 1) {
         return badcommand(COMMAND_ERROR_BAD_COMMAND);
     } else if (args_size > MAX_ARGS_SIZE) {
@@ -130,12 +116,10 @@ int interpreter(char *command_args[], int args_size) {
         return my_cd(command_args[1]);
 
     } else if (strcmp(command_args[0], "exec") == 0) {
-        policy_t policy;
-        int isRunningInBackground, isRunningConcurrently;
         
         // Determine whether to execute the command using multithreading
         isRunningConcurrently = strcmp(command_args[args_size - 1], "MT") == 0 ? 1 : 0;
-        // Check if the exec command needs to convert the remaining user input into a file and execute it
+        // Check if the exec command needs to run the rest of the main shell in the background
         isRunningInBackground = strcmp(command_args[args_size - 1 - isRunningConcurrently], "#") == 0 ? 1 : 0;
         // Retrieve the policy associated with the exec command
         policy = policy_parser(command_args[args_size - 1 - isRunningConcurrently - isRunningInBackground]);
@@ -150,8 +134,12 @@ int interpreter(char *command_args[], int args_size) {
     }
 }
 
+/**
+ * Function implementing the help command
+ * which prints the list of commands available to the user
+ * that the shell provides.
+ */
 int help() {
-    // note the literal tab characters here for alignment
     char help_string[] =
         "COMMAND			DESCRIPTION\n \
 help			Displays all the commands\n \
@@ -163,34 +151,40 @@ run SCRIPT.TXT		Executes the file SCRIPT.TXT\n ";
     return 0;
 }
 
+/**
+ * Function implementing the quit command.
+ * Note that depending on whether a worker thread or the main thread is calling quit
+ * the behaviour differs. Worker threads can only signal the main thread to exit while
+ * the main shell immediately starts the exit procedure.
+ */
 int quit() {
     printf("Bye!\n");
-    pthread_mutex_lock(&finishedWorkLock);
-    startExitProcedure = 1;
-    pthread_cond_signal(&finishedWorkCond);
-    pthread_mutex_unlock(&finishedWorkLock);
+
+    // Case where the main thread is exiting
     if (isMainThread(pthread_self())){
         joinAllThreads();
         exit(0);
+    } else {
+        // Case where the worker threads signal the main thread to exit
+        pthread_mutex_lock(&finishedWorkLock);
+        startExitProcedure = 1;
+        pthread_cond_signal(&finishedWorkCond);
+        pthread_mutex_unlock(&finishedWorkLock);
     }
 }
 
+/**
+ * Function implementing the set command
+ * which associates 5 string values to a variable name.
+ * Note that if the variable already exists then the function overwrites the old values.
+ */
 int set(char *var, char *values[], int number_values) {
     char *link = "=";
 
-    /* PART 1: You might want to write code that looks something like this.
-         You should look up documentation for strcpy and strcat.
-
-    char buffer[MAX_USER_INPUT];
-    strcpy(buffer, var);
-    strcat(buffer, link);
-    strcat(buffer, value);
-    */
-
-    // Input validation
+    // Input validation ensuring the given arguments are strings
     if (!is_alphanumeric(var) || !is_alphanumeric_list(values, number_values)) {
         return badcommand(
-            COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
+            COMMAND_ERROR_NON_ALPHANUM);
     }
 
     mem_set_value(var, values, number_values);
@@ -198,6 +192,10 @@ int set(char *var, char *values[], int number_values) {
     return 0;
 }
 
+/**
+ * Function implementing the print command
+ * which outputs to the user the value of a variable.
+ */
 int print(char *var) {
     char buffer[MAX_VARIABLE_VALUE_SIZE];
     mem_get_value(var, buffer);
@@ -205,6 +203,11 @@ int print(char *var) {
     return 0;
 }
 
+/**
+ * Function implementing the echo command
+ * which outputs to the user the given string
+ * or the variable associated to the string.
+ */
 int echo(char *input) {
     char buffer[MAX_VARIABLE_VALUE_SIZE];  // Buffer to store the variable value
 
@@ -214,7 +217,7 @@ int echo(char *input) {
         // Input validation
         if (!is_alphanumeric(var_name)) {
             return badcommand(
-                COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
+                COMMAND_ERROR_NON_ALPHANUM);
         }
 
         mem_get_value(var_name, buffer);  // Retrieve variable value into buffer
@@ -232,13 +235,19 @@ int echo(char *input) {
     return 0;
 }
 
+/**
+ * Function implementing the ls command
+ * which lists the directories and files in the cd.
+ */
 int my_ls(void) {
-    // Pointer to an array of pointer that points to the content
+    // Pointer to an array of pointers that point to the content
     struct dirent **content;
 
     // store in content the list of file/folder names in the proper order
     int n =
         scandir(".", &content, filterOutParentAndCurrentDirectory, custom_sort);
+    
+    // Check for potential errors from scandir
     if (n < 0) {
         return badcommand(COMMAND_ERROR_SCANDIR);
     } else {
@@ -252,13 +261,17 @@ int my_ls(void) {
     return 0;
 }
 
+/**
+ * Function implementing the touch command
+ * which creates a new file named after the given argument.
+ */
 int my_touch(char *input) {
     FILE *f;
 
     // Input validation
     if (!is_alphanumeric(input)) {
         return badcommand(
-            COMMAND_ERROR_NON_ALPHANUM);  // Input validation error
+            COMMAND_ERROR_NON_ALPHANUM);
     }
 
     // Check if the file exists
@@ -276,6 +289,10 @@ int my_touch(char *input) {
     return 0;
 }
 
+/**
+ * Function implementing the mkdir command
+ * which creates a new directory named after the given argument.
+ */
 int my_mkdir(char *input) {
     char buffer[MAX_VARIABLE_VALUE_SIZE];  // Buffer to store the variable value
 
@@ -306,6 +323,11 @@ int my_mkdir(char *input) {
     return 0;
 }
 
+/**
+* @brief Changes the current working directory.
+* @param input A string representing the path to the target directory.
+* @return 0 on successful execution, -1 on failure.
+*/
 int my_cd(char *input) {
     // Input validation
     if (!is_alphanumeric(input)) {
@@ -321,6 +343,14 @@ int my_cd(char *input) {
     return 0;
 }
 
+/**
+ * @brief Executes a given script.
+ *
+ * This function takes a script as input and executes it.
+ *
+ * @param script  A string representing the path to the script to be executed.
+ * @return 0 on successful execution, -1 on failure.
+ */
 int run(char *script) {
     int errCode = 0;
     FILE *p;
@@ -432,6 +462,9 @@ int is_alphanumeric_list(char **lst, int len_lst) {
     return 1;
 }
 
+/**
+* Helper function that filters out current and parent direction during my_ls
+*/
 int filterOutParentAndCurrentDirectory(const struct dirent *entry) {
     // Skip Over: "." -> Current Directory & ".." -> Parent Directory
     if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
@@ -440,6 +473,19 @@ int filterOutParentAndCurrentDirectory(const struct dirent *entry) {
     return 1;  // True  (i.e Don't Ignore)
 }
 
+
+/**
+ * @brief Custom sorting function for the my_ls command.
+ *
+ * This function is used to sort entries during my_ls with numeric entries first, followed by 
+ * alphabetic entries, prioritizing capital letters over lowercase ones.
+ *
+ * @param d1  A pointer to the my_ls entry to compare.
+ * @param d2  A pointer to the second my_ls entry to compare.
+ * @return    A negative integer if d1 is less than d2,
+ *            a positive integer if d1 is greater than d2,
+ *            and zero if they are equal.
+ */
 int custom_sort(const struct dirent **d1, const struct dirent **d2) {
     // Store name to compare in name1 and name2
     const char *name1 = (*d1)->d_name;
@@ -507,4 +553,31 @@ policy_t policy_parser(char policy_str[]) {
     } else {
         return INVALID_POLICY;
     }
+}
+
+/**
+* Helper function that manages error messages for the interpreter
+*/
+int badcommand(commandError_t errorCode) {
+    switch (errorCode) {
+        case COMMAND_ERROR_BAD_COMMAND:
+            printf("Unknown Command\n");
+            break;
+        case COMMAND_ERROR_TOO_MANY_TOKENS:
+            printf("Bad command: Too many tokens\n");
+            break;
+        case COMMAND_ERROR_FILE_INEXISTENT:
+            printf("Bad command: File not found\n");
+            break;
+        case COMMAND_ERROR_MKDIR:
+            printf("Bad command: my_mkdir\n");
+            break;
+        case COMMAND_ERROR_CD:
+            printf("Bad command: my_cd\n");
+            break;
+        default:
+            break;
+    }
+
+    return (int)errorCode;
 }

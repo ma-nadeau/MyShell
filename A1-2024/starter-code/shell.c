@@ -8,9 +8,13 @@
 #include "interpreter.h"
 #include "shellmemory.h"
 #include "scheduler.h"
+#include "scriptsmemory.h"
 
+/*** FUNCTION SIGNATURES ***/
 int parseInput(char ui[]);
 int convertInputToOneLiners(char input[]);
+int wordEnding(char c);
+int countChar(char input[], char search);
 
 // Start of everything
 int main(int argc, char *argv[]) {
@@ -21,15 +25,17 @@ int main(int argc, char *argv[]) {
     char userInput[MAX_USER_INPUT];  // user's input stored here
     int errorCode = 0;               // zero means no error, default
 
-    // init user input
+    // initialize user input
     for (int i = 0; i < MAX_USER_INPUT; i++) {
         userInput[i] = '\0';
     }
 
-    // init shell memory array and concurrency variable
-    // init scheduler scripts memory array concurrency variables
+    // initialize shell memory array and associated concurrency variable
     mem_init();
+    // initialize scheduler scripts memory array and associated concurrency variables
     scheduler_init();
+    // initialize memory for scripts and associated concurrency variables
+    scripts_memory_init();
 
     while (1) {
         // In batch mode, check if eof is reached to switch back to interactive
@@ -38,40 +44,20 @@ int main(int argc, char *argv[]) {
             freopen("/dev/tty", "r", stdin);
         }
 
-        // if we the stdin is pointing to terminal only print prompt
+        // if print the prompt only if the stdin is pointing to terminal
         if (isatty(fileno(stdin))) {
             printf("%c ", prompt);
         }
-        // here you should check the unistd library
-        // so that you can find a way to not display $ in the batch mode
+
         fgets(userInput, MAX_USER_INPUT - 1, stdin);
         convertInputToOneLiners(userInput);
-        // errorCode = parseInput(userInput);
-        // if (errorCode == -1) exit(99);  // ignore all other errors
         memset(userInput, 0, sizeof(userInput));
     }
 
     return 0;
 }
 
-/*** Parsing Functions ***/
-
-int wordEnding(char c) {
-    // You may want to add ';' to this at some point,
-    // or you may want to find a different way to implement chains.
-    return c == '\0' || c == '\n' || c == ' ';
-}
-
-int countChar(char input[], char search) {
-    int count = 0;
-    for (int i = 0; input[i] != '\0'; i++) {
-        if (input[i] == search) {
-            count++;
-        }
-    }
-    return count;
-}
-
+/*** PARSING FUNCTIONS ***/
 
 /**
  * @brief Converts a single line of commands into executable statements.
@@ -141,4 +127,26 @@ int parseInput(char inp[]) {
     }
 
     return errorCode;
+}
+
+/*** HELPER FUNCTIONS ***/
+
+/**
+ * Predicate determining whether a char is a word-ending character
+ */
+int wordEnding(char c) {
+    return c == '\0' || c == '\n' || c == ' ';
+}
+
+/**
+ * Function that determines how many "search" chars are in the string "input"
+ */
+int countChar(char input[], char search) {
+    int count = 0;
+    for (int i = 0; input[i] != '\0'; i++) {
+        if (input[i] == search) {
+            count++;
+        }
+    }
+    return count;
 }
