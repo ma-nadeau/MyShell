@@ -17,7 +17,9 @@ struct availableMemory *availableMemoryHead;
 /*** FUNCTIONS FOR SCRIPT MEMORY ***/
 
 /**
- * @brief This function intializes the memory for the scripts.
+ * This function intializes the memory for the scripts.
+ *
+ * @return void
  */
 void scripts_memory_init() {
     // Initialize variable and code shellmemory
@@ -37,14 +39,15 @@ void scripts_memory_init() {
     pthread_mutex_init(&memoryAvailabilityDLLLock, NULL);
 }
 
-
 /**
- * @brief Allocates memory for a script.
  *
- * This function allocates a block of memory of the specified length to hold a script.
+ * This function allocates a block of memory of the specified length to hold a
+ * script.
  *
- * @param scriptLength The length of the script for which memory needs to be allocated (i.e., the number of lines).
- * @return Returns the starting index (i.e., the address in memory) on success, or -1 if an error occurs.
+ * @param scriptLength The length of the script for which memory needs to be
+ * allocated (i.e., the number of lines).
+ * @return Returns the starting index (i.e., the address in memory) on success,
+ * or -1 if an error occurs.
  */
 int allocateMemoryScript(int scriptLength) {
     pthread_mutex_lock(&memoryAvailabilityDLLLock);
@@ -61,8 +64,8 @@ int allocateMemoryScript(int scriptLength) {
             blockPointer->length -= scriptLength;
             // Check if the block is now empty
             if (blockPointer->length == 0) {
-                if(blockPointer == availableMemoryHead) {
-                    if (!availableMemoryHead->next){
+                if (blockPointer == availableMemoryHead) {
+                    if (!availableMemoryHead->next) {
                         break;
                     }
                     availableMemoryHead = availableMemoryHead->next;
@@ -86,12 +89,11 @@ int allocateMemoryScript(int scriptLength) {
 }
 
 /**
- * @brief Adds back the memory space previously occupied by a script once it is freed.
+ * This function updates the available memory by marking the specified block of
+ * memory as free, allowing it to be reused for future allocations.
  *
- * This function updates the available memory by marking the specified block of memory 
- * as free, allowing it to be reused for future allocations.
- *
- * @param memoryStartIdx The index in memory where the previously allocated space begins.
+ * @param memoryStartIdx The index in memory where the previously allocated
+ * space begins.
  * @param lengthCode The length of the memory block to be freed.
  * @return void This function does not return a value.
  */
@@ -115,7 +117,7 @@ void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
                 tmp->length = lengthCode;
                 tmp->next = currentMemoryBlock;
                 tmp->prev = currentMemoryBlock->prev;
-                if (currentMemoryBlock->prev){
+                if (currentMemoryBlock->prev) {
                     currentMemoryBlock->prev->next = tmp;
                 }
                 currentMemoryBlock->prev = tmp;
@@ -145,16 +147,25 @@ void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
     pthread_mutex_unlock(&memoryAvailabilityDLLLock);
 }
 
-
 /**
-* Fetches the instruction from shell memory at the specified address.
-*/
+ * Fetches the instruction from shell memory at the specified address.
+ * @param instructionAddress The address in shell memory from which to retrieve
+ * the instruction.
+ *
+ * @return Returns a pointer to the instruction string at the specified address.
+ */
 char *fetchInstruction(int instructionAddress) {
     return shellmemoryCode[instructionAddress];
 }
 /**
-*  Updates the instruction at the specified address in shell memory.
-*/
+ *  Updates the instruction at the specified address in shell memory.
+ * @param instructionAddress The address in shell memory where the instruction
+ * will be updated.
+ * @param newInstruction A pointer to the new instruction string to be stored at
+ * the specified address.
+ *
+ * @return void
+ */
 void updateInstruction(int instructionAddress, char *newInstruction) {
     shellmemoryCode[instructionAddress] = newInstruction;
 }
