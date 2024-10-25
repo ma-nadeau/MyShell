@@ -1,15 +1,15 @@
 #include <ctype.h>
 #include <dirent.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <pthread.h>
 
+#include "scheduler.h"
 #include "shell.h"
 #include "shellmemory.h"
-#include "scheduler.h"
 
 // Max arg size for a single command (name of the command inclusive)
 int MAX_ARGS_SIZE = 7;
@@ -26,7 +26,8 @@ typedef enum commandError_t {
 } commandError_t;
 
 // Global variable that indicates whether an exec command with '#' was run
-// in which case the subsequent exec commands would only load scripts in the readyQueue
+// in which case the subsequent exec commands would only load scripts in the
+// readyQueue
 int execOnlyLoading = 0;
 
 /*** FUNCTION SIGNATURES ***/
@@ -47,16 +48,19 @@ int filterOutParentAndCurrentDirectory(const struct dirent *entry);
 int custom_sort(const struct dirent **d1, const struct dirent **d2);
 int is_alphanumeric_list(char **lst, int len_lst);
 policy_t policy_parser(char policy_str[]);
-int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground, int isRunningConcurrently);
-
+int exec(char *scripts[], int scripts_number, policy_t policy,
+         int isRunningInBackground, int isRunningConcurrently);
 
 /*** FUNCTION INTERPRETER ***/
 
 /**
  * Function that interprets commands and their arguments
- * 
+ *
  * @param command_args List of command arguments
  * @param args_size Total number of command arguments
+ *
+ * @return Returns an zero indicating success (0) or non-zero integer indicating
+ * an error
  */
 int interpreter(char *command_args[], int args_size) {
     int i, isRunningInBackground, isRunningConcurrently;
@@ -119,19 +123,28 @@ int interpreter(char *command_args[], int args_size) {
         return my_cd(command_args[1]);
 
     } else if (strcmp(command_args[0], "exec") == 0) {
-        
         // Determine whether to execute the command using multithreading
-        isRunningConcurrently = strcmp(command_args[args_size - 1], "MT") == 0 ? 1 : 0;
-        // Check if the exec command needs to run the rest of the main shell in the background
-        isRunningInBackground = strcmp(command_args[args_size - 1 - isRunningConcurrently], "#") == 0 ? 1 : 0;
+        isRunningConcurrently =
+            strcmp(command_args[args_size - 1], "MT") == 0 ? 1 : 0;
+        // Check if the exec command needs to run the rest of the main shell in
+        // the background
+        isRunningInBackground =
+            strcmp(command_args[args_size - 1 - isRunningConcurrently], "#") ==
+                    0
+                ? 1
+                : 0;
         // Retrieve the policy associated with the exec command
-        policy = policy_parser(command_args[args_size - 1 - isRunningConcurrently - isRunningInBackground]);
-
+        policy =
+            policy_parser(command_args[args_size - 1 - isRunningConcurrently -
+                                       isRunningInBackground]);
 
         if (args_size < 3 || args_size > 7 || policy == INVALID_POLICY)
             return badcommand(COMMAND_ERROR_BAD_COMMAND);
-        
-        return exec(command_args + 1, args_size - 2 - isRunningConcurrently - isRunningInBackground, policy, isRunningInBackground, isRunningConcurrently);
+
+        return exec(
+            command_args + 1,
+            args_size - 2 - isRunningConcurrently - isRunningInBackground,
+            policy, isRunningInBackground, isRunningConcurrently);
     } else {
         return badcommand(COMMAND_ERROR_BAD_COMMAND);
     }
@@ -143,6 +156,7 @@ int interpreter(char *command_args[], int args_size) {
  * Function implementing the help command
  * which prints the list of commands available to the user
  * that the shell provides.
+ * @return Returns an integer indicating success (0)
  */
 int help() {
     char help_string[] =
@@ -158,15 +172,15 @@ run SCRIPT.TXT		Executes the file SCRIPT.TXT\n ";
 
 /**
  * Function implementing the quit command.
- * Note that depending on whether a worker thread or the main thread is calling quit
- * the behaviour differs. Worker threads can only signal the main thread to exit while
- * the main shell immediately starts the exit procedure.
+ * Note that depending on whether a worker thread or the main thread is calling
+ * quit the behaviour differs. Worker threads can only signal the main thread to
+ * exit while the main shell immediately starts the exit procedure.
  */
 int quit() {
     printf("Bye!\n");
 
     // Case where the main thread is exiting
-    if (isMainThread(pthread_self())){
+    if (isMainThread(pthread_self())) {
         joinAllThreads();
         exit(0);
     } else {
@@ -181,15 +195,22 @@ int quit() {
 /**
  * Function implementing the set command
  * which associates 5 string values to a variable name.
- * Note that if the variable already exists then the function overwrites the old values.
+ * Note that if the variable already exists then the function overwrites the old
+ * values.
+ *
+ * @param var A pointer to the variable name as a string.
+ * @param values An array of pointers to the string values to be associated with
+ * the variable.
+ * @param number_values The number of values to associate (should not exceed 5).
+ *
+ * @return Returns an integer indicating success (0)
  */
 int set(char *var, char *values[], int number_values) {
     char *link = "=";
 
     // Input validation ensuring the given arguments are strings
     if (!is_alphanumeric(var) || !is_alphanumeric_list(values, number_values)) {
-        return badcommand(
-            COMMAND_ERROR_NON_ALPHANUM);
+        return badcommand(COMMAND_ERROR_NON_ALPHANUM);
     }
 
     mem_set_value(var, values, number_values);
@@ -200,6 +221,10 @@ int set(char *var, char *values[], int number_values) {
 /**
  * Function implementing the print command
  * which outputs to the user the value of a variable.
+ *
+ * @param var A pointer to the variable name whose value is to be printed.
+ *
+ * @return Returns an integer indicating success (0)
  */
 int print(char *var) {
     char buffer[MAX_VARIABLE_VALUE_SIZE];
@@ -212,6 +237,11 @@ int print(char *var) {
  * Function implementing the echo command
  * which outputs to the user the given string
  * or the variable associated to the string.
+ *
+ * @param input A pointer to the string to be echoed, which may be a direct
+ * string or a variable name.
+ *
+ * @return Returns an integer indicating success (0) or non-zero on failure
  */
 int echo(char *input) {
     char buffer[MAX_VARIABLE_VALUE_SIZE];  // Buffer to store the variable value
@@ -221,8 +251,7 @@ int echo(char *input) {
 
         // Input validation
         if (!is_alphanumeric(var_name)) {
-            return badcommand(
-                COMMAND_ERROR_NON_ALPHANUM);
+            return badcommand(COMMAND_ERROR_NON_ALPHANUM);
         }
 
         mem_get_value(var_name, buffer);  // Retrieve variable value into buffer
@@ -243,6 +272,9 @@ int echo(char *input) {
 /**
  * Function implementing the ls command
  * which lists the directories and files in the cd.
+ *
+ * @param void
+ * @return Returns an integer indicating success (0) or non-zero on failure
  */
 int my_ls(void) {
     // Pointer to an array of pointers that point to the content
@@ -251,7 +283,7 @@ int my_ls(void) {
     // store in content the list of file/folder names in the proper order
     int n =
         scandir(".", &content, filterOutParentAndCurrentDirectory, custom_sort);
-    
+
     // Check for potential errors from scandir
     if (n < 0) {
         return badcommand(COMMAND_ERROR_SCANDIR);
@@ -269,14 +301,18 @@ int my_ls(void) {
 /**
  * Function implementing the touch command
  * which creates a new file named after the given argument.
+ *
+ * @param input A pointer to the string representing the name of the file to be
+ * created.
+ *
+ * @return Returns an integer indicating success (0) or or non-zero on failure
  */
 int my_touch(char *input) {
     FILE *f;
 
     // Input validation
     if (!is_alphanumeric(input)) {
-        return badcommand(
-            COMMAND_ERROR_NON_ALPHANUM);
+        return badcommand(COMMAND_ERROR_NON_ALPHANUM);
     }
 
     // Check if the file exists
@@ -295,8 +331,12 @@ int my_touch(char *input) {
 }
 
 /**
- * Function implementing the mkdir command
- * which creates a new directory named after the given argument.
+ * Function implementing the mkdir command which creates a new directory named
+ * after the given argument.
+ * @param input A pointer to the string representing the name of the directory
+ * to be created.
+ *
+ * @return Returns an integer indicating success (0) or non-zero on failure
  */
 int my_mkdir(char *input) {
     char buffer[MAX_VARIABLE_VALUE_SIZE];  // Buffer to store the variable value
@@ -329,10 +369,11 @@ int my_mkdir(char *input) {
 }
 
 /**
-* @brief Changes the current working directory.
-* @param input A string representing the path to the target directory.
-* @return 0 on successful execution, -1 on failure.
-*/
+ * Changes the current working directory.
+ *
+ * @param input A string representing the path to the target directory.
+ * @return 0 on successful execution or non-zero on failure
+ */
 int my_cd(char *input) {
     // Input validation
     if (!is_alphanumeric(input)) {
@@ -349,19 +390,18 @@ int my_cd(char *input) {
 }
 
 /**
- * @brief Executes a given script.
  *
  * This function takes a script as input and executes it.
  *
  * @param script  A string representing the path to the script to be executed.
- * @return 0 on successful execution, -1 on failure.
+ * @return 0 on successful execution, or non-zero on failure
  */
 int run(char *script) {
     int errCode = 0;
     FILE *p;
 
     p = fopen(script, "rt");  // the program is in a file
-    if (p == NULL){
+    if (p == NULL) {
         errCode = badcommand(COMMAND_ERROR_FILE_INEXISTENT);
     } else {
         errCode = mem_load_script(p, FCFS);
@@ -373,25 +413,27 @@ int run(char *script) {
 
         fclose(p);
     }
-    
+
     return errCode;
 }
 
 /**
- * @brief Executes a list of scripts based on the given policy.
- *
- * This function takes an array of script names and executes them according to the specified
- * policy. The execution can occur either in the background or concurrently, depending on the 
- * provided flags.
+ * This function takes an array of script names and executes them according to
+ * the specified policy. The execution can occur either in the background or
+ * concurrently, depending on the provided flags.
  *
  * @param scripts An array of strings representing the scripts to be executed.
  * @param scripts_number The number of scripts in the array.
- * @param policy The policy governing the execution of the scripts (e.g., FCFS, SJF, RR, RR30, AGING).
- * @param isRunningInBackground A flag indicating whether the scripts should run in the background (1 for true, 0 for false).
- * @param isRunningConcurrently A flag indicating whether the scripts should run concurrently (1 for true, 0 for false).
+ * @param policy The policy governing the execution of the scripts (e.g., FCFS,
+ * SJF, RR, RR30, AGING).
+ * @param isRunningInBackground A flag indicating whether the scripts should run
+ * in the background (1 for true, 0 for false).
+ * @param isRunningConcurrently A flag indicating whether the scripts should run
+ * concurrently (1 for true, 0 for false).
  * @return Returns non-zero value on failure.
  */
-int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground, int isRunningConcurrently) {
+int exec(char *scripts[], int scripts_number, policy_t policy,
+         int isRunningInBackground, int isRunningConcurrently) {
     int script_idx, errCode = 0;
     FILE *p;
 
@@ -413,7 +455,7 @@ int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBa
         p = fopen(scripts[script_idx], "rt");  // the program is in a file
         // Check if file can be opened
         if (p == NULL) {
-        return badcommand(COMMAND_ERROR_FILE_INEXISTENT);
+            return badcommand(COMMAND_ERROR_FILE_INEXISTENT);
         }
 
         if (mem_load_script(p, policy)) {
@@ -424,12 +466,12 @@ int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBa
     }
 
     // Loading main shell if isRunningInBackground set to True
-    if (isRunningInBackground){
+    if (isRunningInBackground) {
         mem_load_script(stdin, INVALID_POLICY);
         execOnlyLoading = 1;
     }
 
-    if (!execOnlyLoading || isRunningInBackground){
+    if (!execOnlyLoading || isRunningInBackground) {
         schedulerRun(policy, isRunningInBackground, isRunningConcurrently);
     }
 }
@@ -438,6 +480,10 @@ int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBa
 
 /**
  * Helper predicate function that returns whether the string is alphanumeric
+ *
+ * @param str A pointer to the string to be checked for alphanumeric characters.
+ *
+ * @return Returns 1 if the string is alphanumeric, 0 otherwise.
  */
 int is_alphanumeric(char *str) {
     int i = 0;
@@ -455,6 +501,12 @@ int is_alphanumeric(char *str) {
 /**
  * Helper predicate function that returns whether all the strings in the string
  * array are alphanumeric
+ *
+ * @param lst A pointer to an array of strings to be checked for alphanumeric
+ * characters.
+ * @param len_lst The number of strings in the array.
+ *
+ * @return Returns 1 if all strings in the array are alphanumeric, 0 otherwise.
  */
 int is_alphanumeric_list(char **lst, int len_lst) {
     // Loop over all strings in list
@@ -468,8 +520,12 @@ int is_alphanumeric_list(char **lst, int len_lst) {
 }
 
 /**
-* Helper function that filters out current and parent direction during my_ls
-*/
+ * Helper function that filters out current and parent direction during my_ls
+ *
+ * @param entry A pointer to the directory entry structure to be checked.
+ *
+ * @return Returns 0 if the entry is . or .. returns 1 others
+ */
 int filterOutParentAndCurrentDirectory(const struct dirent *entry) {
     // Skip Over: "." -> Current Directory & ".." -> Parent Directory
     if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
@@ -478,18 +534,16 @@ int filterOutParentAndCurrentDirectory(const struct dirent *entry) {
     return 1;  // True  (i.e Don't Ignore)
 }
 
-
 /**
- * @brief Custom sorting function for the my_ls command.
- *
- * This function is used to sort entries during my_ls with numeric entries first, followed by 
- * alphabetic entries, prioritizing capital letters over lowercase ones.
+ * This function is used to sort entries during my_ls with numeric entries
+ * first, followed by alphabetic entries, prioritizing capital letters over
+ * lowercase ones.
  *
  * @param d1  A pointer to the my_ls entry to compare.
  * @param d2  A pointer to the second my_ls entry to compare.
- * @return    A negative integer if d1 is less than d2,
- *            a positive integer if d1 is greater than d2,
- *            and zero if they are equal.
+ * @return    A -1 if d1 is less than d2,
+ *            a 1 if d1 is greater than d2,
+ *            and 0 if they are equal.
  */
 int custom_sort(const struct dirent **d1, const struct dirent **d2) {
     // Store name to compare in name1 and name2
@@ -535,13 +589,13 @@ int custom_sort(const struct dirent **d1, const struct dirent **d2) {
 }
 
 /**
- * @brief Parses a policy string and converts it to a policy_t type.
- *
- * This function takes a string representing a policy and parses it to return 
- * the corresponding 'policy_t' enumeration. Choices are FCFS, SJF, RR, RR30, AGING or INVALID_POLICY
+ * This function takes a string representing a policy and parses it to return
+ * the corresponding 'policy_t' enumeration. Choices are FCFS, SJF, RR, RR30,
+ * AGING or INVALID_POLICY
  *
  * @param policy_str A pointer to a string representing the policy to be parsed.
- * @return Returns the corresponding policy_t value on success, or INVALID_POLICY if parsing fails.
+ * @return Returns the corresponding policy_t value on success, or
+ * INVALID_POLICY if parsing fails.
  */
 policy_t policy_parser(char policy_str[]) {
     // Checking if policy is available
@@ -561,8 +615,15 @@ policy_t policy_parser(char policy_str[]) {
 }
 
 /**
-* Helper function that manages error messages for the interpreter
-*/
+ * Helper function that manages error messages for the interpreter
+ * 
+ * @param errorCode The error code indicating the type of command error
+ * encountered.
+ *
+ * @return Returns an integer indicating the status of the error handling
+ * operation. Typically, returns 0 for successful message display, and non-zero
+ * for errors.
+ */
 int badcommand(commandError_t errorCode) {
     switch (errorCode) {
         case COMMAND_ERROR_BAD_COMMAND:
