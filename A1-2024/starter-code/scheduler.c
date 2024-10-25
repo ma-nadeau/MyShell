@@ -40,6 +40,21 @@ pthread_mutex_t finishedWorkLock;
 
 policy_t policyGlobal;
 
+
+/*** FUNCTION SIGNATURES ***/
+
+void insertPCBFromTailSJF(struct PCB *pcb);
+void placePCBHeadAtEndOfDLL();
+void detachPCBFromQueue(struct PCB *p1);
+struct PCB *popHeadFromPCBQueue();
+void removePCBFromQueue(struct PCB *p1);
+void switchPCBs(struct PCB *p1, struct PCB *p2);
+void placePCBAtStartOfDLL(struct PCB *p1);
+void placePCBAtEndOfDLL(struct PCB *p1);
+
+
+/*** FUNCTION FOR SCHEDULER ***/
+
 /**
  * @brief This function intializes the ready queue.
  */
@@ -63,7 +78,6 @@ void scheduler_init() {
 }
 
 
-void insertPCBFromTailSJF(struct PCB *pcb);
 
 /**
  * @brief Deallocates the memory occupied by a script associated with the given PCB.
@@ -87,78 +101,6 @@ void deallocateMemoryScript(struct PCB *pcb) {
     free(pcb);
 }
 
-/**
- * @brief Removes a PCB from the readyQueue.
- *
- * This function detaches the specified Process Control Block (PCB) from the ready queue and
- * reattaches the previous and next nodes (if any) together.
- *
- * @param p1 A pointer to the PCB to be removed from the queue.
- */
-void detachPCBFromQueue(struct PCB *p1) {
-    // Case where p1 is at the head
-    if (readyQueue.head == p1) {
-        readyQueue.head = readyQueue.head->next;
-        // Check if there are any PCBs left in the queue
-        if (readyQueue.head) {
-            readyQueue.head->prev = NULL;
-        } else {
-            // If not then update the tail
-            readyQueue.tail = NULL;
-        }
-    } else if (readyQueue.tail == p1) {
-        readyQueue.tail = readyQueue.tail->prev;
-
-        if (readyQueue.tail) {
-            readyQueue.tail->next = NULL;
-        }
-
-    } else {
-        p1->prev->next = p1->next;
-        p1->next->prev = p1->prev;
-    }
-
-    // Remove all attachment (free from desire)
-    p1->next = NULL;
-    p1->prev = NULL;
-}
-
-/**
- * @brief Removes and returns the head process control block (PCB) from the queue.
- *
- * This function retrieves and removes the first PCB from the PCB queue. 
- * If the queue is empty, it returns NULL.
- *
- * @return A pointer to the PCB that was removed from the head of the queue, 
- *         or NULL if the queue is empty.
- */
-struct PCB *popHeadFromPCBQueue() {
-    struct PCB *rv;
-
-    pthread_mutex_lock(&readyQueueLock);
-        if (readyQueue.head){
-            rv = readyQueue.head;
-            detachPCBFromQueue(readyQueue.head);
-        } else {
-            rv = NULL;
-        }
-    pthread_mutex_unlock(&readyQueueLock);
-
-    return rv;
-}
-
-/**
- * @brief Removes a PCB from the queue and deallocates associated resources.
- *
- * This function detaches the specified Process Control Block (PCB) from the readyQueue and 
- * deallocates any memory resources associated with it.
- *
- * @param p1 A pointer to the PCB to be removed from the queue.
- */
-void removePCBFromQueue(struct PCB *p1) {
-    detachPCBFromQueue(p1);
-    deallocateMemoryScript(p1);
-}
 
 /**
  * @brief Loads a new script into memory.
@@ -237,76 +179,6 @@ int mem_load_script(FILE *p, policy_t policy) {
     return 0;
 }
 
-/**
- * @brief Switches two PCB nodes in the readyQueue DLL.
- *
- * This function takes two pointers to Process Control Blocks (PCBs) and
- *  swaps place in the ReadyQueue DLL.
- *
- * @param p1 A pointer to the first PCB to be switched.
- * @param p2 A pointer to the second PCB to be switched.
- */
-void switchPCBs(struct PCB *p1, struct PCB *p2) {
-    struct PCB *tmp;
-
-    pthread_mutex_lock(&readyQueueLock);
-    // Updating nodes around p1
-    if (p1->prev && p1->prev != p2) {
-        p1->prev->next = p2;
-    }
-    if (p1->next && p1->next != p2) {
-        p1->next->prev = p2;
-    }
-    // Updating nodes around p2
-    if (p2->prev && p2->prev != p1) {
-        p2->prev->next = p1;
-    }
-    if (p2->next && p2->next != p1) {
-        p2->next->prev = p1;
-    }
-
-    // Updating next att for p1 and p2
-    tmp = p2->next;
-    if (p1->next != p2) {
-        p2->next = p1->next;
-    } else {
-        p2->next = p1;
-    }
-    if (tmp != p1) {
-        p1->next = tmp;
-    } else {
-        p1->next = p2;
-    }
-    // Updating prev att for p1 and p2
-    tmp = p2->prev;
-    if (p1->prev != p2) {
-        p2->prev = p1->prev;
-    } else {
-        p2->prev = p1;
-    }
-    if (tmp != p1) {
-        p1->prev = tmp;
-    } else {
-        p1->prev = p2;
-    }
-
-    // Update head
-    if (p1 == readyQueue.head) {
-        readyQueue.head = p2;
-    } else if (p2 == readyQueue.head) {
-        readyQueue.head = p1;
-    }
-    // Update tail
-    if (p1 == readyQueue.tail) {
-        readyQueue.tail = p2;
-    } else if (p2 == readyQueue.tail) {
-        readyQueue.tail = p1;
-    }
-
-    pthread_mutex_unlock(&readyQueueLock);
-}
-
-
 
 /**
  * @brief Executes the PCBs from the ready queue.
@@ -330,93 +202,8 @@ void executeReadyQueuePCBs() {
     }
 }
 
-/**
- * @brief Inserts a PCB at the start (head) of a doubly linked list.
- *
- * This function takes a pointer to a PCB structure and adds it to the start (head) of the 
- * readyQueue doubly linked list.
- *
- * @param p1 A pointer to the PCB structure to be placed at the start (head) of the linked list.
- */
-void placePCBHeadAtEndOfDLL() {
-    struct PCB *tmp;
 
-    // Check for case where list is empty or one PCB only
-    if (readyQueue.tail == readyQueue.head) {
-        return;
-    }
-    tmp = readyQueue.head;
-
-    // Update the head
-    readyQueue.head = readyQueue.head->next;
-    readyQueue.head->prev = NULL;
-
-    // Update the tail
-    readyQueue.tail->next = tmp;
-    tmp->prev = readyQueue.tail;
-    tmp->next = NULL;
-    readyQueue.tail = tmp;
-}
-
-
-/**
- * @brief Inserts a PCB at the end (tail) of a doubly linked list.
- *
- * This function takes a pointer to a PCB structure and appends it to the end (tail) of the 
- * readyQueue doubly linked list.
- *
- * @param p1 A pointer to the PCB structure to be placed at the end of the linked list.
- */
-void placePCBAtEndOfDLL(struct PCB *p1) {
-    int wasPlaced = 0;
-    pthread_mutex_lock(&readyQueueLock);
-    // Check for case where list is empty
-    if (!readyQueue.head) {
-        readyQueue.head = p1;
-        readyQueue.tail = p1;
-        p1->next = NULL;
-        p1->prev = NULL;
-        wasPlaced = 1;
-    }
-
-    // Update the tail
-    if (!wasPlaced) {
-        readyQueue.tail->next = p1;
-        p1->prev = readyQueue.tail;
-        p1->next = NULL;
-        readyQueue.tail = p1;
-    }
-    pthread_mutex_unlock(&readyQueueLock);
-}
-
-void placePCBAtStartOfDLL(struct PCB *p1) {
-    int wasPlaced = 0;
-    pthread_mutex_lock(&readyQueueLock);
-    // Check for case where list is empty
-    if (!readyQueue.head) {
-        readyQueue.head = p1;
-        readyQueue.tail = p1;
-        p1->next = NULL;
-        p1->prev = NULL;
-        wasPlaced = 1;
-    }
-
-    // Update the tail
-    if (!wasPlaced) {
-        readyQueue.head->prev = p1;
-        p1->next = readyQueue.head;
-        p1->prev = NULL;
-        readyQueue.head = p1;
-    }
-    pthread_mutex_unlock(&readyQueueLock);
-}
-
-/* ============================================
- * Section: Execute Scripts Functions
- *
- * This section contains functions related to 
- * the execute scripts from the shell.
- * ============================================ */
+/*** FUNCTION FOR EXECUTING THE SCRIPTS ***/
 
 /**
  * @brief Executes the Round Robin (RR) scheduling policy.
@@ -700,4 +487,240 @@ void insertPCBFromTailSJF(struct PCB *pcb){
         readyQueue.head->prev = pcb;
         readyQueue.head = pcb;
     }
+}
+
+
+/*** HELPER FUNCTIONS ***/
+
+/**
+ * @brief Removes a PCB from the readyQueue.
+ *
+ * This function detaches the specified Process Control Block (PCB) from the ready queue and
+ * reattaches the previous and next nodes (if any) together.
+ *
+ * @param p1 A pointer to the PCB to be removed from the queue.
+ */
+void detachPCBFromQueue(struct PCB *p1) {
+    // Case where p1 is at the head
+    if (readyQueue.head == p1) {
+        readyQueue.head = readyQueue.head->next;
+        // Check if there are any PCBs left in the queue
+        if (readyQueue.head) {
+            readyQueue.head->prev = NULL;
+        } else {
+            // If not then update the tail
+            readyQueue.tail = NULL;
+        }
+    } else if (readyQueue.tail == p1) {
+        readyQueue.tail = readyQueue.tail->prev;
+
+        if (readyQueue.tail) {
+            readyQueue.tail->next = NULL;
+        }
+
+    } else {
+        p1->prev->next = p1->next;
+        p1->next->prev = p1->prev;
+    }
+
+    // Remove all attachment (free from desire)
+    p1->next = NULL;
+    p1->prev = NULL;
+}
+
+/**
+ * @brief Removes and returns the head process control block (PCB) from the queue.
+ *
+ * This function retrieves and removes the first PCB from the PCB queue. 
+ * If the queue is empty, it returns NULL.
+ *
+ * @return A pointer to the PCB that was removed from the head of the queue, 
+ *         or NULL if the queue is empty.
+ */
+struct PCB *popHeadFromPCBQueue() {
+    struct PCB *rv;
+
+    pthread_mutex_lock(&readyQueueLock);
+        if (readyQueue.head){
+            rv = readyQueue.head;
+            detachPCBFromQueue(readyQueue.head);
+        } else {
+            rv = NULL;
+        }
+    pthread_mutex_unlock(&readyQueueLock);
+
+    return rv;
+}
+
+/**
+ * @brief Removes a PCB from the queue and deallocates associated resources.
+ *
+ * This function detaches the specified Process Control Block (PCB) from the readyQueue and 
+ * deallocates any memory resources associated with it.
+ *
+ * @param p1 A pointer to the PCB to be removed from the queue.
+ */
+void removePCBFromQueue(struct PCB *p1) {
+    detachPCBFromQueue(p1);
+    deallocateMemoryScript(p1);
+}
+
+/**
+ * @brief Switches two PCB nodes in the readyQueue DLL.
+ *
+ * This function takes two pointers to Process Control Blocks (PCBs) and
+ *  swaps place in the ReadyQueue DLL.
+ *
+ * @param p1 A pointer to the first PCB to be switched.
+ * @param p2 A pointer to the second PCB to be switched.
+ */
+void switchPCBs(struct PCB *p1, struct PCB *p2) {
+    struct PCB *tmp;
+
+    pthread_mutex_lock(&readyQueueLock);
+    // Updating nodes around p1
+    if (p1->prev && p1->prev != p2) {
+        p1->prev->next = p2;
+    }
+    if (p1->next && p1->next != p2) {
+        p1->next->prev = p2;
+    }
+    // Updating nodes around p2
+    if (p2->prev && p2->prev != p1) {
+        p2->prev->next = p1;
+    }
+    if (p2->next && p2->next != p1) {
+        p2->next->prev = p1;
+    }
+
+    // Updating next att for p1 and p2
+    tmp = p2->next;
+    if (p1->next != p2) {
+        p2->next = p1->next;
+    } else {
+        p2->next = p1;
+    }
+    if (tmp != p1) {
+        p1->next = tmp;
+    } else {
+        p1->next = p2;
+    }
+    // Updating prev att for p1 and p2
+    tmp = p2->prev;
+    if (p1->prev != p2) {
+        p2->prev = p1->prev;
+    } else {
+        p2->prev = p1;
+    }
+    if (tmp != p1) {
+        p1->prev = tmp;
+    } else {
+        p1->prev = p2;
+    }
+
+    // Update head
+    if (p1 == readyQueue.head) {
+        readyQueue.head = p2;
+    } else if (p2 == readyQueue.head) {
+        readyQueue.head = p1;
+    }
+    // Update tail
+    if (p1 == readyQueue.tail) {
+        readyQueue.tail = p2;
+    } else if (p2 == readyQueue.tail) {
+        readyQueue.tail = p1;
+    }
+
+    pthread_mutex_unlock(&readyQueueLock);
+}
+
+
+/**
+ * @brief Inserts a PCB at the start (head) of a doubly linked list.
+ *
+ * This function takes a pointer to a PCB structure and adds it to the start (head) of the 
+ * readyQueue doubly linked list.
+ *
+ * @param p1 A pointer to the PCB structure to be placed at the start (head) of the linked list.
+ */
+void placePCBHeadAtEndOfDLL() {
+    struct PCB *tmp;
+
+    // Check for case where list is empty or one PCB only
+    if (readyQueue.tail == readyQueue.head) {
+        return;
+    }
+    tmp = readyQueue.head;
+
+    // Update the head
+    readyQueue.head = readyQueue.head->next;
+    readyQueue.head->prev = NULL;
+
+    // Update the tail
+    readyQueue.tail->next = tmp;
+    tmp->prev = readyQueue.tail;
+    tmp->next = NULL;
+    readyQueue.tail = tmp;
+}
+
+
+/**
+ * @brief Inserts a PCB at the end (tail) of a doubly linked list.
+ *
+ * This function takes a pointer to a PCB structure and appends it to the end (tail) of the 
+ * readyQueue doubly linked list.
+ *
+ * @param p1 A pointer to the PCB structure to be placed at the end of the linked list.
+ */
+void placePCBAtEndOfDLL(struct PCB *p1) {
+    int wasPlaced = 0;
+    pthread_mutex_lock(&readyQueueLock);
+    // Check for case where list is empty
+    if (!readyQueue.head) {
+        readyQueue.head = p1;
+        readyQueue.tail = p1;
+        p1->next = NULL;
+        p1->prev = NULL;
+        wasPlaced = 1;
+    }
+
+    // Update the tail
+    if (!wasPlaced) {
+        readyQueue.tail->next = p1;
+        p1->prev = readyQueue.tail;
+        p1->next = NULL;
+        readyQueue.tail = p1;
+    }
+    pthread_mutex_unlock(&readyQueueLock);
+}
+
+
+/**
+ * @brief Inserts a PCB at the start (head) of a doubly linked list.
+ *
+ * This function takes a pointer to a PCB structure and appends it to the start (head) of the 
+ * readyQueue doubly linked list.
+ *
+ * @param p1 A pointer to the PCB structure to be placed at the end of the linked list.
+ */
+void placePCBAtStartOfDLL(struct PCB *p1) {
+    int wasPlaced = 0;
+    pthread_mutex_lock(&readyQueueLock);
+    // Check for case where list is empty
+    if (!readyQueue.head) {
+        readyQueue.head = p1;
+        readyQueue.tail = p1;
+        p1->next = NULL;
+        p1->prev = NULL;
+        wasPlaced = 1;
+    }
+
+    // Update the tail
+    if (!wasPlaced) {
+        readyQueue.head->prev = p1;
+        p1->next = readyQueue.head;
+        p1->prev = NULL;
+        readyQueue.head = p1;
+    }
+    pthread_mutex_unlock(&readyQueueLock);
 }

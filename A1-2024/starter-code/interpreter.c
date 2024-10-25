@@ -49,6 +49,9 @@ int is_alphanumeric_list(char **lst, int len_lst);
 policy_t policy_parser(char policy_str[]);
 int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBackground, int isRunningConcurrently);
 
+
+/*** FUNCTION INTERPRETER ***/
+
 /**
  * Function that interprets commands and their arguments
  * 
@@ -133,6 +136,8 @@ int interpreter(char *command_args[], int args_size) {
         return badcommand(COMMAND_ERROR_BAD_COMMAND);
     }
 }
+
+/*** FUNCTION FOR SHELL COMMAND ***/
 
 /**
  * Function implementing the help command

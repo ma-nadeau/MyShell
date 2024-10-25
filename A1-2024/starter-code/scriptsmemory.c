@@ -14,6 +14,8 @@ pthread_mutex_t memoryAvailabilityDLLLock;
 char *shellmemoryCode[MEM_SIZE];
 struct availableMemory *availableMemoryHead;
 
+/*** FUNCTIONS FOR SCRIPT MEMORY ***/
+
 /**
  * @brief This function intializes the memory for the scripts.
  */
@@ -143,14 +145,15 @@ void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
     pthread_mutex_unlock(&memoryAvailabilityDLLLock);
 }
 
+
 /**
-*
+* Fetches the instruction from shell memory at the specified address.
 */
 char *fetchInstruction(int instructionAddress) {
     return shellmemoryCode[instructionAddress];
 }
 /**
-* 
+*  Updates the instruction at the specified address in shell memory.
 */
 void updateInstruction(int instructionAddress, char *newInstruction) {
     shellmemoryCode[instructionAddress] = newInstruction;

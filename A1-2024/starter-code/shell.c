@@ -11,6 +11,7 @@
 #include "scriptsmemory.h"
 
 /*** FUNCTION SIGNATURES ***/
+
 int parseInput(char ui[]);
 int convertInputToOneLiners(char input[]);
 int wordEnding(char c);
