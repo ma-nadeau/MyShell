@@ -101,6 +101,15 @@ int convertInputToOneLiners(char input[]) {
     return errorCode;
 }
 
+/**
+ * @brief Executes a single command
+ * 
+ * The function takes as input a string containing the command and associated arguments
+ * and it executes it.
+ * 
+ * @param input A string containing the command and arguments.
+ * @return Returns 0 on success, or a non-zero value on failure.
+ */
 int parseInput(char inp[]) {
     char tmp[MAX_TOKEN_SIZE], *words[100];
     int ix = 0, w = 0, wordlen, errorCode, token_idx;
