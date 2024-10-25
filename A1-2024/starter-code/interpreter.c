@@ -329,7 +329,7 @@ int run(char *script) {
     if (p == NULL){
         errCode = badcommand(COMMAND_ERROR_FILE_INEXISTENT);
     } else {
-        errCode = mem_load_script(p);
+        errCode = mem_load_script(p, FCFS);
         if (!errCode) {
             schedulerRun(FCFS, 0, 0);
         } else if (errCode == -1) {
@@ -373,12 +373,6 @@ int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBa
         }
     }
 
-    // Loading main shell if isRunningInBackground set to True
-    if (isRunningInBackground){
-        mem_load_script(stdin);
-        execOnlyLoading = 1;
-    }
-
     // Loading scripts into memory and checking for any errors
     for (script_idx = 0; script_idx < scripts_number; script_idx++) {
         p = fopen(scripts[script_idx], "rt");  // the program is in a file
@@ -387,11 +381,17 @@ int exec(char *scripts[], int scripts_number, policy_t policy, int isRunningInBa
         return badcommand(COMMAND_ERROR_FILE_INEXISTENT);
         }
 
-        if (mem_load_script(p)) {
+        if (mem_load_script(p, policy)) {
             return badcommand(COMMAND_ERROR_BAD_COMMAND);
         }
 
         fclose(p);
+    }
+
+    // Loading main shell if isRunningInBackground set to True
+    if (isRunningInBackground){
+        mem_load_script(stdin, INVALID_POLICY);
+        execOnlyLoading = 1;
     }
 
     if (!execOnlyLoading || isRunningInBackground){

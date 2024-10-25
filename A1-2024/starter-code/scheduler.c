@@ -90,6 +90,9 @@ void scheduler_init() {
     pthread_cond_init(&finishedWorkCond, NULL);
 }
 
+
+void insertPCBFromTailSJF(struct PCB *pcb);
+
 /**
  * @brief Allocates memory for a script.
  *
@@ -302,7 +305,7 @@ void removePCBFromQueue(struct PCB *p1) {
  * @param p A pointer to the FILE object representing the script to be loaded.
  * @return Returns 0 on success, or a negative value on failure (e.g., if the file cannot be read).
  */
-int mem_load_script(FILE *p) {
+int mem_load_script(FILE *p, policy_t policy) {
     char line[MAX_USER_INPUT];
     int scriptLength = 0, line_idx, mem_idx;
     struct PCB *newPCB;
@@ -338,16 +341,31 @@ int mem_load_script(FILE *p) {
     newPCB->lengthScore = scriptLength;
     newPCB->programCounter = mem_idx;
     newPCB->next = NULL;
+    newPCB->prev = NULL;
 
     pthread_mutex_lock(&readyQueueLock);
-    if (readyQueue.tail) {
-        readyQueue.tail->next = newPCB;
-        newPCB->prev = readyQueue.tail;
-    }
-    readyQueue.tail = newPCB;
-    if (!readyQueue.head) {
-        readyQueue.head = readyQueue.tail;
-        readyQueue.head->prev = NULL;
+    if(policy == INVALID_POLICY){
+        if (readyQueue.head){
+            readyQueue.head->prev = newPCB;
+            newPCB->next = readyQueue.head;
+        }
+        readyQueue.head = newPCB;
+        if (!readyQueue.tail){
+            readyQueue.tail = readyQueue.head;
+            readyQueue.tail->next = NULL;
+        }
+    } else if(policy == SJF || policy == AGING){
+        insertPCBFromTailSJF(newPCB);
+    } else {
+        if (readyQueue.tail) {
+            readyQueue.tail->next = newPCB;
+            newPCB->prev = readyQueue.tail;
+        }
+        readyQueue.tail = newPCB;
+        if (!readyQueue.head) {
+            readyQueue.head = readyQueue.tail;
+            readyQueue.head->prev = NULL;
+        }
     }
     pthread_mutex_unlock(&readyQueueLock);
 
@@ -447,47 +465,6 @@ void executeReadyQueuePCBs() {
     }
 }
 
-
-/**
- * @brief Orders PCBs in increasing order
- *
- * This function rearranges the readyQueue of PCBs such that the biggest processes run fist
- *
- * @param isRunningBackground A flag indicating whether to consider background processes (1 for true, 0 for false).
- */
-void orderIncreasingPCBs(int isRunningBackground) {
-    struct PCB *smallest;
-    struct PCB *currentPCB;
-    struct PCB *headWithoutMain;
-
-    headWithoutMain = isRunningBackground ? readyQueue.head->next : readyQueue.head;
-
-    smallest = headWithoutMain;
-    currentPCB = headWithoutMain->next;
-
-    // Here we are simply comparing the head with the other values, and
-    // selecting the one with the smallest number of lines
-    while (currentPCB) {
-        if (currentPCB->lengthScore < smallest->lengthScore) {
-            smallest = currentPCB;
-        }
-        currentPCB = currentPCB->next;
-    }
-
-    if (smallest != headWithoutMain) {
-        switchPCBs(smallest, headWithoutMain);
-    }
-    
-    headWithoutMain = isRunningBackground ? readyQueue.head->next : readyQueue.head;
-
-    
-    if (headWithoutMain->next && headWithoutMain->next->next &&
-        headWithoutMain->next->next->lengthScore <
-            headWithoutMain->next->lengthScore) {
-        switchPCBs(headWithoutMain->next, headWithoutMain->next->next);
-    }
-}
-
 /**
  * @brief Inserts a PCB at the start (head) of a doubly linked list.
  *
@@ -547,6 +524,28 @@ void placePCBAtEndOfDLL(struct PCB *p1) {
     pthread_mutex_unlock(&readyQueueLock);
 }
 
+void placePCBAtStartOfDLL(struct PCB *p1) {
+    int wasPlaced = 0;
+    pthread_mutex_lock(&readyQueueLock);
+    // Check for case where list is empty
+    if (!readyQueue.head) {
+        readyQueue.head = p1;
+        readyQueue.tail = p1;
+        p1->next = NULL;
+        p1->prev = NULL;
+        wasPlaced = 1;
+    }
+
+    // Update the tail
+    if (!wasPlaced) {
+        readyQueue.head->prev = p1;
+        p1->next = readyQueue.head;
+        p1->prev = NULL;
+        readyQueue.head = p1;
+    }
+    pthread_mutex_unlock(&readyQueueLock);
+}
+
 /* ============================================
  * Section: Execute Scripts Functions
  *
@@ -596,62 +595,46 @@ void runRR(int lineNumber) {
  * @return Nothing
  */
 void runAging() {
-    struct PCB *currentPCB, *smallest, *currentHead;
-    int line_idx, programCounterTmp;
+    struct PCB *currentPCB, *tmp, *smallest, *currentHead;
+    int line_idx, programCounterTmp, needToSwitch = 0;
     
-    while (readyQueue.head) {
-        currentHead = readyQueue.head;
+    currentPCB = popHeadFromPCBQueue();
+    while (currentPCB) {
 
         // Time slice
         convertInputToOneLiners(
-            shellmemoryCode[readyQueue.head->programCounter]);
-        readyQueue.head->programCounter++;
+            shellmemoryCode[currentPCB->programCounter]);
+        currentPCB->programCounter++;
 
         // Aging all processes
-        currentPCB = readyQueue.head->next;
-        while (currentPCB) {
+        pthread_mutex_lock(&readyQueueLock);
+        tmp = readyQueue.head;
+        while (tmp) {
             // Make sure that the length score is not null
-            if (currentPCB->lengthScore) {
-                currentPCB->lengthScore--;
+            if (tmp->lengthScore) {
+                tmp->lengthScore--;
             }
-            currentPCB = currentPCB->next;
+            tmp = tmp->next;
         }
+        pthread_mutex_unlock(&readyQueueLock);
 
         // Check if process has stopped running
-        if (readyQueue.head->programCounter ==
-            readyQueue.head->memoryStartIdx + readyQueue.head->lengthCode) {
-            removePCBFromQueue(readyQueue.head);
-        }
-
-        // Check if there are any other processes left
-        if (!readyQueue.head) {
-            break;
-        }
-
-        // Find the process with lowest score closest to Head of list
-        currentPCB = readyQueue.head;
-        smallest = currentPCB;
-        while (currentPCB) {
-            if (currentPCB->lengthScore < smallest->lengthScore) {
-                smallest = currentPCB;
+        if (currentPCB->programCounter ==
+            currentPCB->memoryStartIdx + currentPCB->lengthCode) {
+            deallocateMemoryScript(currentPCB);
+            currentPCB = popHeadFromPCBQueue();
+        } else{ // Preempt the head if it has a bigger score than other processes
+            pthread_mutex_lock(&readyQueueLock);
+            if (readyQueue.head && readyQueue.head->lengthScore < currentPCB->lengthScore){
+                insertPCBFromTailSJF(currentPCB);
+                needToSwitch = 1;
             }
-            currentPCB = currentPCB->next;
+            pthread_mutex_unlock(&readyQueueLock);
+            if (needToSwitch) {
+                currentPCB = popHeadFromPCBQueue();
+                needToSwitch = 0;
+            }
         }
-
-        // Preempt the head if it didn't finish running
-        if (currentHead == readyQueue.head) {
-            placePCBHeadAtEndOfDLL();
-        }
-        // Put the smallest PCB at the start of the queue
-        detachPCBFromQueue(smallest);
-        smallest->next = readyQueue.head;
-        smallest->prev = NULL;
-        if (readyQueue.head) {
-            readyQueue.head->prev = smallest;
-        } else {
-            readyQueue.tail = smallest;
-        }
-        readyQueue.head = smallest;
     }
 }
 
@@ -738,10 +721,6 @@ void schedulerRun(policy_t policy, int isRunningBackground,
     struct PCB *currentPCB, *smallest, *currentHead;
     int line_idx, programCounterTmp, startMainExitProcedure = 0;
 
-    if (policy == SJF || policy == AGING){
-        orderIncreasingPCBs(isRunningBackground);
-    }
-
     if (isRunningConcurrently && !isRunningWorkers) {
         for (int i = 0; i < WORKERS_NUMBER; i++) {
             int *workerId = (int *) malloc(sizeof(int));
@@ -811,4 +790,49 @@ int isMainThread(pthread_t runningPthread) {
     }
 
     return 1;
+}
+
+void insertPCBFromTailSJF(struct PCB *pcb){
+    struct PCB *currentPCB;
+    int wasInserted = 0;
+
+    // Case where the readyQueue is empty
+    if(readyQueue.tail == NULL) {
+        readyQueue.tail = pcb;
+        readyQueue.tail->next = NULL;
+        readyQueue.tail->prev = NULL;
+        readyQueue.head = readyQueue.tail;
+        wasInserted = 1;
+    }
+
+    if(!wasInserted){
+        // Otherwise, we iterate until we find a pcb with a lengthScore higher than the pcb to insert
+        currentPCB = readyQueue.tail;
+        while(currentPCB){
+            if(pcb->lengthScore >= currentPCB->lengthScore){
+                pcb->prev = currentPCB;
+                pcb->next = currentPCB->next;
+                if(currentPCB->next){
+                    currentPCB->next->prev = pcb;
+                }
+                currentPCB->next = pcb;
+
+                if(currentPCB == readyQueue.tail){
+                    readyQueue.tail = pcb;
+                }
+                wasInserted = 1;
+                break;
+            }
+            currentPCB = currentPCB->prev;
+        }
+    }
+    
+
+    // If the pcb wasn't inserted, that means that it has the smallest lengthscore and should be the new head
+    if(!wasInserted){
+        pcb->next = readyQueue.head;
+        pcb->prev = NULL;
+        readyQueue.head->prev = pcb;
+        readyQueue.head = pcb;
+    }
 }

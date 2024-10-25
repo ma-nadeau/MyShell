@@ -17,7 +17,7 @@ extern pthread_cond_t finishedWorkCond;
 
 
 void scheduler_init();
-int mem_load_script(FILE *p);
+int mem_load_script(FILE *p, policy_t policy);
 void schedulerRun(policy_t policy, int isRunningBackground, int isRunningInBackground);
 void joinAllThreads();
 int isMainThread(pthread_t runningPthread);
