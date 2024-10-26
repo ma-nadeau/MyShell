@@ -357,13 +357,13 @@ void *workerThread(void *args) {
 /**
  * Executes the scheduling process based on the specified policy and
  * execution modes. This function initiates the scheduling of processes
- * according to the provided policy. It manages the cases where the main program
+ * according to the provided policy. It manages the cases where the exec
  * is run in the background (#) and the use of concurrent threads (MT),
  * adjusting the scheduling behavior accordingly.
  *
  * @param policy A value of type 'policy_t' representing the scheduling policy
  * to be applied.
- * @param isRunningBackground An integer flag indicating if the main program
+ * @param isRunningBackground An integer flag indicating if exec
  * should execute in the background. (1 if True, 0 if False)
  * @param isRunningConcurrently An integer flag indicating if processes should
  * run concurrently. (1 if True, 0 if False)

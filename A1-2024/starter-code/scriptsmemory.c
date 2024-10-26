@@ -89,7 +89,7 @@ int allocateMemoryScript(int scriptLength) {
         blockPointer = blockPointer->next;
     }
 
-    // If we end up here it means that no memory was available for the script
+    // If tmp=-1 here it means that no memory was available for the script
     pthread_mutex_unlock(&memoryAvailabilityDLLLock);
     return tmp;
 }

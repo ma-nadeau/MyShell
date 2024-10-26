@@ -120,8 +120,7 @@ int interpreter(char *command_args[], int args_size) {
     } else if (strcmp(command_args[0], "exec") == 0) {
         // Determine whether to execute the command using multithreading
         isRunningConcurrently = strcmp(command_args[args_size - 1], "MT") == 0 ? 1 : 0;
-        // Check if the exec command needs to run the rest of the main shell in
-        // the background
+        // Check if the exec command needs to run in the background
         isRunningInBackground =
             strcmp(command_args[args_size - 1 - isRunningConcurrently], "#") == 0 ? 1 : 0;
         // Retrieve the policy associated with the exec command
