@@ -1,10 +1,8 @@
-#include "scheduler.h"
-
 #include <pthread.h>
-#include <semaphore.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "scheduler.h"
 #include "scriptsmemory.h"
 #include "shell.h"
 #include "shellmemory.h"
@@ -44,26 +42,19 @@ policy_t policyGlobal;
 /*** FUNCTION SIGNATURES ***/
 
 void insertPCBFromTailSJF(struct PCB *pcb);
-void placePCBHeadAtEndOfDLL();
 void detachPCBFromQueue(struct PCB *p1);
 struct PCB *popHeadFromPCBQueue();
-void removePCBFromQueue(struct PCB *p1);
-void switchPCBs(struct PCB *p1, struct PCB *p2);
-void placePCBAtStartOfDLL(struct PCB *p1);
 void placePCBAtEndOfDLL(struct PCB *p1);
 
-/*** FUNCTION FOR SCHEDULER ***/
-
 /**
- * This function intializes the ready queue.
- *
- * @return void
+ * This function intializes the ready queue and associated required resources.
  */
 void scheduler_init() {
     // Initialize readyQueue
     readyQueue.head = NULL;
     readyQueue.tail = NULL;
 
+    // Initialize global variables
     isRunningWorkers = 0;
     policyGlobal = INVALID_POLICY;
     isTimeToExit = 0;
@@ -71,6 +62,7 @@ void scheduler_init() {
     startExitProcedure = 0;
     finishedWork = 0;
 
+    // Initialize concurrency variables
     pthread_mutex_init(&readyQueueLock, NULL);
     pthread_mutex_init(&isThereWorkToDoLock, NULL);
     pthread_cond_init(&isThereWorkToDoCond, NULL);
@@ -87,7 +79,7 @@ void scheduler_init() {
  * memory is to be deallocated.
  * @return void This function does not return a value.
  */
-void deallocateMemoryScript(struct PCB *pcb) {
+void terminateProcess(struct PCB *pcb) {
     int line_idx;
 
     // Free the code in shell memory
@@ -96,16 +88,15 @@ void deallocateMemoryScript(struct PCB *pcb) {
         free(fetchInstruction(line_idx));
     }
 
+    // Give back the memory used by the process
     addMemoryAvailability(pcb->memoryStartIdx, pcb->lengthCode);
     free(pcb);
 }
 
 /**
- * This function takes a file pointer to a script file and loads its contents
- * into the shell memory.
+ * This function takes a file pointer to a script file and creates a process for it.
  *
  * @param p A pointer to the FILE object representing the script to be loaded.
- *
  * @return Returns 0 on success, or a negative value on failure (e.g., if the
  * file cannot be read).
  */
@@ -115,10 +106,12 @@ int mem_load_script(FILE *p, policy_t policy) {
     struct PCB *newPCB;
     char *scriptLines[MEM_SIZE];
 
+    // Make sure the given File is valid
     if (p == NULL) {
         return -1;
     }
 
+    // Extracting all lines from script into buffer array scriptLines
     while (1) {
         fgets(line, MAX_USER_INPUT - 1, p);
         scriptLines[scriptLength] = strdup(line);
@@ -131,13 +124,15 @@ int mem_load_script(FILE *p, policy_t policy) {
         }
     }
 
+    // Find available memory in the shell to store the script's memory
     mem_idx = allocateMemoryScript(scriptLength);
 
+    // Write script's instructions (lines) in the shell memory
     for (line_idx = mem_idx; line_idx < mem_idx + scriptLength; line_idx++) {
         updateInstruction(line_idx, scriptLines[line_idx - mem_idx]);
     }
 
-    // Initialize new PCB
+    // Initialize new PCB for new process being created
     newPCB = (struct PCB *)malloc(sizeof(struct PCB));
     newPCB->pid = rand();
     newPCB->memoryStartIdx = mem_idx;
@@ -147,7 +142,10 @@ int mem_load_script(FILE *p, policy_t policy) {
     newPCB->next = NULL;
     newPCB->prev = NULL;
 
+    // Insert into the PCB readyQueue differently depending on policy
     pthread_mutex_lock(&readyQueueLock);
+    // The INVALID_POLICY is used to load the main shell program
+    // (when # is used) at the start of the ready queue
     if (policy == INVALID_POLICY) {
         if (readyQueue.head) {
             readyQueue.head->prev = newPCB;
@@ -158,8 +156,13 @@ int mem_load_script(FILE *p, policy_t policy) {
             readyQueue.tail = readyQueue.head;
             readyQueue.tail->next = NULL;
         }
+    // For the SJF and AGING policy, the PCB is inserted
+    // by comparing the "lengthScore" so that the PCB
+    // with min. lengthScore is at the head of the queue
     } else if (policy == SJF || policy == AGING) {
         insertPCBFromTailSJF(newPCB);
+    // In all the other cases (RR, FCFS), the PCB is inserted
+    // at the end of the queue
     } else {
         if (readyQueue.tail) {
             readyQueue.tail->next = newPCB;
@@ -176,13 +179,13 @@ int mem_load_script(FILE *p, policy_t policy) {
     return 0;
 }
 
+/*** FUNCTIONS FOR EXECUTING THE SCRIPTS ***/
+
 /**
  * This function iterates through the ready queue of Process Control Blocks
  * (PCBs) and executes each PCB one after the other starting at the head (i.e.,
  * head, head->next, ..., tail).
- *
- * @return void
- *
+ * This function is used for FCFS, and SJF
  */
 void executeReadyQueuePCBs() {
     int line_idx;
@@ -195,11 +198,9 @@ void executeReadyQueuePCBs() {
              line_idx++, currentPCB->programCounter++) {
             convertInputToOneLiners(fetchInstruction(line_idx));
         }
-        deallocateMemoryScript(currentPCB);
+        terminateProcess(currentPCB);
     }
 }
-
-/*** FUNCTION FOR EXECUTING THE SCRIPTS ***/
 
 /**
  * Executes the Round Robin (RR) scheduling policy. This function implements the
@@ -226,7 +227,7 @@ void runRR(int lineNumber) {
         // Check if process has finished running
         if (currentPCB->programCounter ==
             currentPCB->memoryStartIdx + currentPCB->lengthCode) {
-            deallocateMemoryScript(currentPCB);
+            terminateProcess(currentPCB);
         } else {
             placePCBAtEndOfDLL(currentPCB);
         }
@@ -264,7 +265,7 @@ void runAging() {
         // Check if process has stopped running
         if (currentPCB->programCounter ==
             currentPCB->memoryStartIdx + currentPCB->lengthCode) {
-            deallocateMemoryScript(currentPCB);
+            terminateProcess(currentPCB);
             currentPCB = popHeadFromPCBQueue();
         } else {  // Preempt the head if it has a bigger score than other
                   // processes
@@ -285,17 +286,15 @@ void runAging() {
 
 /**
  * Selects the scheduling strategy based on the specified policy.This function
- * takes a scheduling policy as input and configures the readyQueue accordingly
+ * takes a scheduling policy as input and runs the readyQueue accordingly.
  *
  * @param policy A value of type `policy_t` that represents the scheduling
- * policy to be used. (i.e., FCSF, SJF, RR, RR30, AGING)
- *
- * @return void
+ * policy to be used. (i.e., FCFS, SJF, RR, RR30, AGING)
  */
 void selectSchedule(policy_t policy) {
     switch (policy) {
-        // Since the readyQueue for SJF was sorted in schedulerRun beforehand,
-        // it becomes the same as FCFS
+        // Since the readyQueue for SJF was sorted in schedulerRun beforehand
+        // when inserting, it becomes the same as FCFS
         case FCFS:
         case SJF:
             executeReadyQueuePCBs();
@@ -314,39 +313,40 @@ void selectSchedule(policy_t policy) {
 
 /**
  * The main function for the worker thread. This function runs in a loop,
- * waiting for work to be available via a semaphore. When work is signaled, it
+ * waiting for work to be available via condition variables. When work is signaled, it
  * selects the scheduling policy to manage process execution. The loop continues
- * until a termination signal is received
- *
- * @param workerID A pointer to the unique identifier for the worker thread
- *
- * @return void
+ * until a termination signal is received.
  */
-void *workerThread(void *workerID) {
+void *workerThread(void *args) {
     int startWorkerExitProcedure = 0;
     policy_t workerPolicy;
 
     while (1) {
+        // Wait for workToDo or termination signal
         pthread_mutex_lock(&isThereWorkToDoLock);
         while (!isTimeToExit && !isThereWorkToDo) {
             pthread_cond_wait(&isThereWorkToDoCond, &isThereWorkToDoLock);
         }
 
+        // Work to do case
         if (isThereWorkToDo) {
             isThereWorkToDo--;
             workerPolicy = policyGlobal;
         }
+        // Termination case
         if (isTimeToExit) {
             startWorkerExitProcedure = 1;
         }
         pthread_mutex_unlock(&isThereWorkToDoLock);
 
+        // Exit procedure and thread termination
+        // in the case where the main thread signaled for termination
         if (startWorkerExitProcedure) {
-            free(workerID);
             pthread_exit(NULL);
         }
         selectSchedule(workerPolicy);
 
+        // Signal the main thread that worker finished working
         pthread_mutex_lock(&finishedWorkLock);
         finishedWork++;
         pthread_cond_signal(&finishedWorkCond);
@@ -357,14 +357,14 @@ void *workerThread(void *workerID) {
 /**
  * Executes the scheduling process based on the specified policy and
  * execution modes. This function initiates the scheduling of processes
- * according to the provided policy. It manages whether the processes should run
- * in the background or concurrently, adjusting the scheduling behavior
- * accordingly.
+ * according to the provided policy. It manages the cases where the main program
+ * is run in the background (#) and the use of concurrent threads (MT),
+ * adjusting the scheduling behavior accordingly.
  *
  * @param policy A value of type 'policy_t' representing the scheduling policy
  * to be applied.
- * @param isRunningBackground An integer flag indicating if the scheduling
- * should occur in the background. (1 if True, 0 if False)
+ * @param isRunningBackground An integer flag indicating if the main program
+ * should execute in the background. (1 if True, 0 if False)
  * @param isRunningConcurrently An integer flag indicating if processes should
  * run concurrently. (1 if True, 0 if False)
  *
@@ -375,38 +375,45 @@ void schedulerRun(policy_t policy, int isRunningBackground,
     struct PCB *currentPCB, *smallest, *currentHead;
     int line_idx, programCounterTmp, startMainExitProcedure = 0;
 
+    // For the concurrency case, start the threads if they weren't
+    // already running
     if (isRunningConcurrently && !isRunningWorkers) {
         for (int i = 0; i < WORKERS_NUMBER; i++) {
-            int *workerId = (int *)malloc(sizeof(int));
-            *workerId = i;
-            pthread_create(&workers[i], NULL, workerThread, workerId);
+            pthread_create(&workers[i], NULL, workerThread, NULL);
         }
         isRunningWorkers = 1;
     }
 
+    // Concurrency enabled case
     if (isRunningConcurrently) {
+        // Signal the threads to start working
+        // according to the policyGlobal
         pthread_mutex_lock(&isThereWorkToDoLock);
         policyGlobal = policy;
         isThereWorkToDo = 2;
         pthread_cond_broadcast(&isThereWorkToDoCond);
         pthread_mutex_unlock(&isThereWorkToDoLock);
 
-        // Wait for the worker threads
+        // Wait for the worker threads to finish
         pthread_mutex_lock(&finishedWorkLock);
         while (!startExitProcedure && finishedWork < 2) {
             pthread_cond_wait(&finishedWorkCond, &finishedWorkLock);
         }
 
+        // Reset finishedWork variable if applicable
+        // for the next time the workers are running
         if (finishedWork >= 2) {
             finishedWork = 0;
         }
 
+        // Check if a 'quit' command was called from a
+        // worker thread
         if (startExitProcedure) {
             startMainExitProcedure = 1;
         }
         pthread_mutex_unlock(&finishedWorkLock);
 
-        // Check if quit called in threads
+        
         if (startMainExitProcedure) {
             joinAllThreads();
             exit(0);
@@ -415,6 +422,8 @@ void schedulerRun(policy_t policy, int isRunningBackground,
         selectSchedule(policy);
     }
 }
+
+/*** HELPER FUNCTIONS */
 
 /**
  * Waits for all running worker threads to finish execution. This function sets
@@ -426,25 +435,23 @@ void schedulerRun(policy_t policy, int isRunningBackground,
  */
 void joinAllThreads() {
     if (isRunningWorkers) {
+        // Signal worker threads to terminate
         pthread_mutex_lock(&isThereWorkToDoLock);
         isTimeToExit = 1;
         pthread_cond_broadcast(&isThereWorkToDoCond);
         pthread_mutex_unlock(&isThereWorkToDoLock);
 
+        // Join all threads
         for (int i = 0; i < WORKERS_NUMBER; i++) {
             pthread_join(workers[i], NULL);
         }
     }
 }
 
-/** This function iterates through a list of worker thread IDs and checks if
- * the given thread ID matches any worker thread ID. If a match is found,
- * the function returns 0, indicating that the specified thread is not the main
- * thread. If no match is found, it returns 1, indicating that the specified
- * thread is the main thread.
+/** 
+ * This predicate function returns whether the runningPthread is the main thread
  *
  * @param runningPthread The thread ID (of type pthread_t) to check.
- *
  * @return Returns 1 if the specified thread is the main thread; returns 0 if it
  * matches a worker thread.
  */
@@ -463,8 +470,6 @@ int isMainThread(pthread_t runningPthread) {
  *
  * @param pcb A pointer to the PCB structure representing the process to be
  * added to the queue.
- *
- * @return void
  */
 void insertPCBFromTailSJF(struct PCB *pcb) {
     struct PCB *currentPCB;
@@ -480,8 +485,8 @@ void insertPCBFromTailSJF(struct PCB *pcb) {
     }
 
     if (!wasInserted) {
-        // Otherwise, we iterate until we find a pcb with a lengthScore higher
-        // than the pcb to insert
+        // Otherwise, we iterate/propagate backwards until we find a pcb
+        // with a lengthScore higher than the pcb to insert
         currentPCB = readyQueue.tail;
         while (currentPCB) {
             if (pcb->lengthScore >= currentPCB->lengthScore) {
@@ -512,19 +517,17 @@ void insertPCBFromTailSJF(struct PCB *pcb) {
     }
 }
 
-/*** HELPER FUNCTIONS ***/
-
 /**
  * This function detaches the specified Process Control Block (PCB) from the
  * ready queue and reattaches the previous and next nodes (if any) together.
  *
- * @param p1 A pointer to the PCB to be removed from the queue.
+ * @param pcb A pointer to the PCB to be removed from the queue.
  * 
  * @return void
  */
-void detachPCBFromQueue(struct PCB *p1) {
-    // Case where p1 is at the head
-    if (readyQueue.head == p1) {
+void detachPCBFromQueue(struct PCB *pcb) {
+    // Case where pcb is at the head
+    if (readyQueue.head == pcb) {
         readyQueue.head = readyQueue.head->next;
         // Check if there are any PCBs left in the queue
         if (readyQueue.head) {
@@ -533,21 +536,22 @@ void detachPCBFromQueue(struct PCB *p1) {
             // If not then update the tail
             readyQueue.tail = NULL;
         }
-    } else if (readyQueue.tail == p1) {
+    // Case where pcb is at the tail
+    } else if (readyQueue.tail == pcb) {
         readyQueue.tail = readyQueue.tail->prev;
 
         if (readyQueue.tail) {
             readyQueue.tail->next = NULL;
         }
-
+    // Generic case where pcb is in the middle of the queue
     } else {
-        p1->prev->next = p1->next;
-        p1->next->prev = p1->prev;
+        pcb->prev->next = pcb->next;
+        pcb->next->prev = pcb->prev;
     }
 
     // Remove all attachment (free from desire)
-    p1->next = NULL;
-    p1->prev = NULL;
+    pcb->next = NULL;
+    pcb->prev = NULL;
 }
 
 /**
@@ -573,174 +577,26 @@ struct PCB *popHeadFromPCBQueue() {
 }
 
 /**
- * This function detaches the specified Process Control Block (PCB) from the
- * readyQueue and deallocates any memory resources associated with it.
- *
- * @param p1 A pointer to the PCB to be removed from the queue.
- * 
- * @return void
- */
-void removePCBFromQueue(struct PCB *p1) {
-    detachPCBFromQueue(p1);
-    deallocateMemoryScript(p1);
-}
-
-/**
- * This function takes two pointers to Process Control Blocks (PCBs) and
- * swaps place in the ReadyQueue DLL.
- *
- * @param p1 A pointer to the first PCB to be switched.
- * @param p2 A pointer to the second PCB to be switched.
- * 
- * @return void
- */
-void switchPCBs(struct PCB *p1, struct PCB *p2) {
-    struct PCB *tmp;
-
-    pthread_mutex_lock(&readyQueueLock);
-    // Updating nodes around p1
-    if (p1->prev && p1->prev != p2) {
-        p1->prev->next = p2;
-    }
-    if (p1->next && p1->next != p2) {
-        p1->next->prev = p2;
-    }
-    // Updating nodes around p2
-    if (p2->prev && p2->prev != p1) {
-        p2->prev->next = p1;
-    }
-    if (p2->next && p2->next != p1) {
-        p2->next->prev = p1;
-    }
-
-    // Updating next att for p1 and p2
-    tmp = p2->next;
-    if (p1->next != p2) {
-        p2->next = p1->next;
-    } else {
-        p2->next = p1;
-    }
-    if (tmp != p1) {
-        p1->next = tmp;
-    } else {
-        p1->next = p2;
-    }
-    // Updating prev att for p1 and p2
-    tmp = p2->prev;
-    if (p1->prev != p2) {
-        p2->prev = p1->prev;
-    } else {
-        p2->prev = p1;
-    }
-    if (tmp != p1) {
-        p1->prev = tmp;
-    } else {
-        p1->prev = p2;
-    }
-
-    // Update head
-    if (p1 == readyQueue.head) {
-        readyQueue.head = p2;
-    } else if (p2 == readyQueue.head) {
-        readyQueue.head = p1;
-    }
-    // Update tail
-    if (p1 == readyQueue.tail) {
-        readyQueue.tail = p2;
-    } else if (p2 == readyQueue.tail) {
-        readyQueue.tail = p1;
-    }
-
-    pthread_mutex_unlock(&readyQueueLock);
-}
-
-/**
- * This function takes a pointer to a PCB structure and adds it to the start
- * (head) of the readyQueue doubly linked list.
- *
- * @param p1 A pointer to the PCB structure to be placed at the start (head) of
- * the linked list.
- * 
- * @return void
- */
-void placePCBHeadAtEndOfDLL() {
-    struct PCB *tmp;
-
-    // Check for case where list is empty or one PCB only
-    if (readyQueue.tail == readyQueue.head) {
-        return;
-    }
-    tmp = readyQueue.head;
-
-    // Update the head
-    readyQueue.head = readyQueue.head->next;
-    readyQueue.head->prev = NULL;
-
-    // Update the tail
-    readyQueue.tail->next = tmp;
-    tmp->prev = readyQueue.tail;
-    tmp->next = NULL;
-    readyQueue.tail = tmp;
-}
-
-/**
  * This function takes a pointer to a PCB structure and appends it to the end
  * (tail) of the readyQueue doubly linked list.
  *
- * @param p1 A pointer to the PCB structure to be placed at the end of the
+ * @param pcb A pointer to the PCB structure to be placed at the end of the
  * linked list.
- * 
- * @return void
  */
-void placePCBAtEndOfDLL(struct PCB *p1) {
-    int wasPlaced = 0;
+void placePCBAtEndOfDLL(struct PCB *pcb) {
     pthread_mutex_lock(&readyQueueLock);
     // Check for case where list is empty
     if (!readyQueue.head) {
-        readyQueue.head = p1;
-        readyQueue.tail = p1;
-        p1->next = NULL;
-        p1->prev = NULL;
-        wasPlaced = 1;
-    }
-
-    // Update the tail
-    if (!wasPlaced) {
-        readyQueue.tail->next = p1;
-        p1->prev = readyQueue.tail;
-        p1->next = NULL;
-        readyQueue.tail = p1;
-    }
-    pthread_mutex_unlock(&readyQueueLock);
-}
-
-/**
- * This function takes a pointer to a PCB structure and appends it to the start
- * (head) of the readyQueue doubly linked list.
- *
- * @param p1 A pointer to the PCB structure to be placed at the end of the
- * linked list.
- * 
- * @return void
- */
-void placePCBAtStartOfDLL(struct PCB *p1) {
-    int wasPlaced = 0;
-    pthread_mutex_lock(&readyQueueLock);
-    // Check for case where list is empty
-    if (!readyQueue.head) {
-        readyQueue.head = p1;
-        readyQueue.tail = p1;
-        p1->next = NULL;
-        p1->prev = NULL;
-        wasPlaced = 1;
-    }
-
-    // Update the tail
-    if (!wasPlaced) {
-        readyQueue.head->prev = p1;
-        p1->next = readyQueue.head;
-        p1->prev = NULL;
-        readyQueue.head = p1;
+        readyQueue.head = pcb;
+        readyQueue.tail = pcb;
+        pcb->next = NULL;
+        pcb->prev = NULL;
+    // Update the tail only otherwise
+    } else {
+        readyQueue.tail->next = pcb;
+        pcb->prev = readyQueue.tail;
+        pcb->next = NULL;
+        readyQueue.tail = pcb;
     }
     pthread_mutex_unlock(&readyQueueLock);
 }

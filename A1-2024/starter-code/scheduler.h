@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <pthread.h>
+
 #define WORKERS_NUMBER 2
 
 typedef enum policy_t {

@@ -1,10 +1,9 @@
-#include "shell.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
+#include "shell.h"
 #include "interpreter.h"
 #include "scheduler.h"
 #include "scriptsmemory.h"
@@ -22,7 +21,6 @@ int countChar(char input[], char search);
  *
  * @param argc The number of command-line arguments passed to the program.
  * @param argv An array of pointers to the command-line arguments.
- *
  * @return Returns an integer status code, 0 for success
  */
 int main(int argc, char *argv[]) {
@@ -150,7 +148,6 @@ int parseInput(char inp[]) {
  * Predicate determining whether a char is a word-ending character
  *
  * @param c The character to be checked.
- *
  * @return Returns 1 (true) if the character is a word-ending character,
  * otherwise returns 0 (false)
  */
@@ -159,9 +156,8 @@ int wordEnding(char c) { return c == '\0' || c == '\n' || c == ' '; }
 /**
  * Function that determines how many "search" chars are in the string "input"
  *
- * @param input A null-terminated string in which to count occurrences of the character.
- * @param search The character to search for within the input string.
- *
+ * @param input A string in which to count occurrences of the character.
+ * @param search The character to search from within the input string.
  * @return Returns the number of times the specified character appears in the string.
  */
 int countChar(char input[], char search) {
