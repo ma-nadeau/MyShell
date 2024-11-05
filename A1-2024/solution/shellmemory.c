@@ -8,7 +8,7 @@ struct memory_struct {
     char *value;
 };
 
-struct memory_struct shellmemory[MEM_SIZE];
+struct memory_struct shellmemory[VAR_MEMSIZE];
 
 // Helper functions
 int match(char *model, char *var) {
@@ -25,7 +25,7 @@ int match(char *model, char *var) {
 
 void mem_init(){
     int i;
-    for (i = 0; i < MEM_SIZE; i++) {		
+    for (i = 0; i < VAR_MEMSIZE; i++) {		
         shellmemory[i].var   = "none";
         shellmemory[i].value = "none";
     }
@@ -35,7 +35,7 @@ void mem_init(){
 void mem_set_value(char *var_in, char *value_in) {
     int i;
 
-    for (i = 0; i < MEM_SIZE; i++) {
+    for (i = 0; i < VAR_MEMSIZE; i++) {
         if (strcmp(shellmemory[i].var, var_in) == 0) {
             shellmemory[i].value = strdup(value_in);
             return;
@@ -43,7 +43,7 @@ void mem_set_value(char *var_in, char *value_in) {
     }
 
     //Value does not exist, need to find a free spot.
-    for (i = 0; i < MEM_SIZE; i++) {
+    for (i = 0; i < VAR_MEMSIZE; i++) {
         if (strcmp(shellmemory[i].var, "none") == 0) {
             shellmemory[i].var   = strdup(var_in);
             shellmemory[i].value = strdup(value_in);
@@ -58,7 +58,7 @@ void mem_set_value(char *var_in, char *value_in) {
 char *mem_get_value(char *var_in) {
     int i;
 
-    for (i = 0; i < MEM_SIZE; i++) {
+    for (i = 0; i < VAR_MEMSIZE; i++) {
         if (strcmp(shellmemory[i].var, var_in) == 0){
             return strdup(shellmemory[i].value);
         } 

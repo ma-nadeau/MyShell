@@ -22,7 +22,7 @@ struct program_line {
     char *line;
 };
 
-struct program_line linememory[MEM_SIZE];
+struct program_line linememory[VAR_MEMSIZE];
 
 // We have two choices:
 //  1. Offer an API that lets the client allocate one line at a time.
@@ -69,7 +69,7 @@ void reset_linememory_allocator() {
 // the linememory is empty.
 
 void assert_linememory_is_empty() {
-    for (size_t i = 0; i < MEM_SIZE; ++i) {
+    for (size_t i = 0; i < VAR_MEMSIZE; ++i) {
         assert(!linememory[i].allocated);
         assert(linememory[i].line == NULL);
     }
@@ -78,14 +78,14 @@ void assert_linememory_is_empty() {
 // note that init_linemem is not exposed from the header.
 // We made init_mem call init_linemem, down below.
 void init_linemem() {
-    for (size_t i = 0; i < MEM_SIZE; ++i) {
+    for (size_t i = 0; i < VAR_MEMSIZE; ++i) {
         linememory[i].allocated = false;
         linememory[i].line = NULL;
     }
 }
 
 size_t allocate_line(const char *line) {
-    if (next_free_line >= MEM_SIZE) {
+    if (next_free_line >= VAR_MEMSIZE) {
         // out of memory!
         return (size_t)(-1);
     }
@@ -133,7 +133,7 @@ struct memory_struct {
     char *value;
 };
 
-struct memory_struct shellmemory[MEM_SIZE];
+struct memory_struct shellmemory[VAR_MEMSIZE];
 
 // Helper functions
 int match(char *model, char *var) {
@@ -150,7 +150,7 @@ int match(char *model, char *var) {
 
 void mem_init(){
     int i;
-    for (i = 0; i < MEM_SIZE; i++) {		
+    for (i = 0; i < VAR_MEMSIZE; i++) {		
         // Include a character that's impossible to type so that
         // we don't mistake an empty entry for an entry named 'none'.
         shellmemory[i].var   = "none\1";
@@ -164,7 +164,7 @@ void mem_init(){
 void mem_set_value(char *var_in, char *value_in) {
     int i;
 
-    for (i = 0; i < MEM_SIZE; i++) {
+    for (i = 0; i < VAR_MEMSIZE; i++) {
         if (strcmp(shellmemory[i].var, var_in) == 0) {
             free(shellmemory[i].value);
             shellmemory[i].value = strdup(value_in);
@@ -173,7 +173,7 @@ void mem_set_value(char *var_in, char *value_in) {
     }
 
     //Value does not exist, need to find a free spot.
-    for (i = 0; i < MEM_SIZE; i++) {
+    for (i = 0; i < VAR_MEMSIZE; i++) {
         if (strcmp(shellmemory[i].var, "none\1") == 0) {
             shellmemory[i].var   = strdup(var_in);
             shellmemory[i].value = strdup(value_in);
@@ -188,7 +188,7 @@ void mem_set_value(char *var_in, char *value_in) {
 char *mem_get_value(char *var_in) {
     int i;
 
-    for (i = 0; i < MEM_SIZE; i++) {
+    for (i = 0; i < VAR_MEMSIZE; i++) {
         if (strcmp(shellmemory[i].var, var_in) == 0){
             return strdup(shellmemory[i].value);
         } 

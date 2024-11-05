@@ -1,4 +1,4 @@
-#define MEM_SIZE 1000
+#define VAR_MEMSIZE 1000
 
 void assert_linememory_is_empty(void);
 size_t allocate_line(const char *line);
