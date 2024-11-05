@@ -7,16 +7,6 @@
 #include "shell.h"
 #include "shellmemory.h"
 
-struct PCB {
-    int pid;
-    int memoryStartIdx;
-    int lengthCode;
-    int lengthScore;
-    int programCounter;
-    struct PCB *next;
-    struct PCB *prev;
-};
-
 struct PCBQueue {
     struct PCB *head;
     struct PCB *tail;
@@ -97,18 +87,17 @@ void terminateProcess(struct PCB *pcb) {
  * This function takes a file pointer to a script file and creates a process for it.
  *
  * @param p A pointer to the FILE object representing the script to be loaded.
- * @return Returns 0 on success, or a negative value on failure (e.g., if the
- * file cannot be read).
+ * @return Returns a pointer to the newly created PCB or Null for an error
  */
-int mem_load_script(FILE *p, policy_t policy) {
+struct PCB *mem_load_script(FILE *p, policy_t policy) {
     char line[MAX_USER_INPUT];
     int scriptLength = 0, line_idx, mem_idx;
     struct PCB *newPCB;
-    char *scriptLines[MEM_SIZE];
+    char *scriptLines[VAR_MEMSIZE];
 
     // Make sure the given File is valid
     if (p == NULL) {
-        return -1;
+        return NULL;
     }
 
     // Extracting all lines from script into buffer array scriptLines
@@ -132,13 +121,30 @@ int mem_load_script(FILE *p, policy_t policy) {
         updateInstruction(line_idx, scriptLines[line_idx - mem_idx]);
     }
 
+    newPCB = createPCB(policy, mem_idx, scriptLength);
+    
+    return newPCB;
+}
+
+/**
+    Creates a new PCB for a process and inserts it into the ready queue.
+    
+    @param policy The scheduling policy to be used.
+    @param mem_idx The index in the shell memory where the script is stored.
+    @param scriptLength The length of the script.
+    
+    @return A pointer to the newly created PCB.
+*/
+struct PCB *createPCB(policy_t policy, int mem_idx, int scriptLength){
+    struct PCB *newPCB;
+
     // Initialize new PCB for new process being created
     newPCB = (struct PCB *)malloc(sizeof(struct PCB));
     newPCB->pid = rand();
     newPCB->memoryStartIdx = mem_idx;
     newPCB->lengthCode = scriptLength;
     newPCB->lengthScore = scriptLength;
-    newPCB->programCounter = mem_idx;
+    newPCB->virtualAddress = mem_idx;
     newPCB->next = NULL;
     newPCB->prev = NULL;
 
@@ -175,8 +181,6 @@ int mem_load_script(FILE *p, policy_t policy) {
         }
     }
     pthread_mutex_unlock(&readyQueueLock);
-
-    return 0;
 }
 
 /*** FUNCTIONS FOR EXECUTING THE SCRIPTS ***/
@@ -193,9 +197,9 @@ void executeReadyQueuePCBs() {
 
     while ((currentPCB = popHeadFromPCBQueue())) {
         // Execute all lines of code
-        for (line_idx = currentPCB->programCounter;
+        for (line_idx = currentPCB->virtualAddress;
              line_idx < currentPCB->memoryStartIdx + currentPCB->lengthCode;
-             line_idx++, currentPCB->programCounter++) {
+             line_idx++, currentPCB->virtualAddress++) {
             convertInputToOneLiners(fetchInstruction(line_idx));
         }
         terminateProcess(currentPCB);
@@ -217,15 +221,15 @@ void runRR(int lineNumber) {
 
     while ((currentPCB = popHeadFromPCBQueue())) {
         // Execute lineNumber lines of code
-        programCounterTmp = currentPCB->programCounter;
-        for (line_idx = currentPCB->programCounter;
+        programCounterTmp = currentPCB->virtualAddress;
+        for (line_idx = currentPCB->virtualAddress;
              line_idx < currentPCB->memoryStartIdx + currentPCB->lengthCode &&
              line_idx < programCounterTmp + lineNumber;
-             line_idx++, currentPCB->programCounter++) {
+             line_idx++, currentPCB->virtualAddress++) {
             convertInputToOneLiners(fetchInstruction(line_idx));
         }
         // Check if process has finished running
-        if (currentPCB->programCounter ==
+        if (currentPCB->virtualAddress ==
             currentPCB->memoryStartIdx + currentPCB->lengthCode) {
             terminateProcess(currentPCB);
         } else {
@@ -247,8 +251,8 @@ void runAging() {
     currentPCB = popHeadFromPCBQueue();
     while (currentPCB) {
         // Time slice
-        convertInputToOneLiners(fetchInstruction(currentPCB->programCounter));
-        currentPCB->programCounter++;
+        convertInputToOneLiners(fetchInstruction(currentPCB->virtualAddress));
+        currentPCB->virtualAddress++;
 
         // Aging all processes
         pthread_mutex_lock(&readyQueueLock);
@@ -263,7 +267,7 @@ void runAging() {
         pthread_mutex_unlock(&readyQueueLock);
 
         // Check if process has stopped running
-        if (currentPCB->programCounter ==
+        if (currentPCB->virtualAddress ==
             currentPCB->memoryStartIdx + currentPCB->lengthCode) {
             terminateProcess(currentPCB);
             currentPCB = popHeadFromPCBQueue();

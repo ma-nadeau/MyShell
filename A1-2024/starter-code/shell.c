@@ -24,7 +24,7 @@ int countChar(char input[], char search);
  * @return Returns an integer status code, 0 for success
  */
 int main(int argc, char *argv[]) {
-    printf("Shell version 1.3 created September 2024\n\n");
+    printf("Frame Store Size = %d; Variable Store Size = %d\n\n", FRAME_STORE_SIZE, VAR_MEMSIZE);
     // help();  //Not printing the help text anymore at start of shell
 
     char prompt = '$';               // Shell prompt

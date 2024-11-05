@@ -14,7 +14,7 @@ struct memory_struct {
 // Mutex lock used whenever the array for variables is accessed
 pthread_mutex_t memoryVariableArrayLock;
 
-struct memory_struct shellmemory[MEM_SIZE];
+struct memory_struct shellmemory[VAR_MEMSIZE];
 
 /*** FUNCTION SIGNATURES ***/
 
@@ -29,7 +29,7 @@ void mem_clear_value(int mem_idx);
 void mem_init() {
     // Initialize variable and code shellmemory
     int mem_idx, val_idx;
-    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
+    for (mem_idx = 0; mem_idx < VAR_MEMSIZE; mem_idx++) {
         shellmemory[mem_idx].var = NULL;
         for (val_idx = 0; val_idx < MAX_VALUE_SIZE; val_idx++) {
             shellmemory[mem_idx].value[val_idx] = NULL;
@@ -52,7 +52,7 @@ void mem_set_value(char *var_in, char *values_in[], int number_values) {
     int mem_idx, val_idx, wasSet = 0;
 
     // If variable exists, we overwrite the values
-    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
+    for (mem_idx = 0; mem_idx < VAR_MEMSIZE; mem_idx++) {
         pthread_mutex_lock(&memoryVariableArrayLock);
         // Check to see if memory spot was not initialized (in which case we
         // reached the end of initialized variables) or whether the memory spot
@@ -91,7 +91,7 @@ int mem_get_variable_index(char *var_in) {
     int mem_idx, val_idx, ret_idx = -1;
 
     pthread_mutex_lock(&memoryVariableArrayLock);
-    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
+    for (mem_idx = 0; mem_idx < VAR_MEMSIZE; mem_idx++) {
         // Case where we reached end of initialized memory
         if (shellmemory[mem_idx].var == NULL) {
             break;

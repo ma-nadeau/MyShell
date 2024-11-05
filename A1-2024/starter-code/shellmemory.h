@@ -1,6 +1,10 @@
 #include <stdio.h>
 
-#define MEM_SIZE 1000
+#ifndef VAR_MEMSIZE
+#define VAR_MEMSIZE 10
+
+#endif
+
 #define MAX_VALUE_SIZE 5
 #define MAX_TOKEN_SIZE 200
 #define MAX_VARIABLE_VALUE_SIZE \

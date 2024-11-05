@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "shellmemory.h"
+#include "scriptsmemory.h"
 
 struct availableMemory {
     int memoryStartIdx;
@@ -11,7 +12,7 @@ struct availableMemory {
 };
 
 pthread_mutex_t memoryAvailabilityDLLLock;
-char *shellmemoryCode[MEM_SIZE];
+char *shellmemoryCode[FRAME_STORE_SIZE];
 struct availableMemory *availableMemoryHead;
 
 /*** FUNCTIONS FOR SCRIPT MEMORY ***/
@@ -23,7 +24,7 @@ struct availableMemory *availableMemoryHead;
 void scripts_memory_init() {
     // Initialize variable and code shellmemory
     int mem_idx, val_idx;
-    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
+    for (mem_idx = 0; mem_idx < VAR_MEMSIZE; mem_idx++) {
         shellmemoryCode[mem_idx] = NULL;
     }
 
@@ -31,7 +32,7 @@ void scripts_memory_init() {
     availableMemoryHead =
         (struct availableMemory *)malloc(sizeof(struct availableMemory));
     availableMemoryHead->memoryStartIdx = 0;
-    availableMemoryHead->length = MEM_SIZE;
+    availableMemoryHead->length = VAR_MEMSIZE;
     availableMemoryHead->next = NULL;
     availableMemoryHead->prev = NULL;
 
