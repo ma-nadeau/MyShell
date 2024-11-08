@@ -22,8 +22,7 @@ typedef enum commandError_t {
     COMMAND_ERROR_CD,
     COMMAND_ERROR_SCANDIR,
     COMMAND_ERROR_FILE_OPEN,
-    COMMAND_ERROR_NON_ALPHANUM,
-    COMMAND_ERROR_MEM_LOAD_SCRIPT
+    COMMAND_ERROR_NON_ALPHANUM
 } commandError_t;
 
 // Global variable that indicates whether an exec command with '#' was run
@@ -381,28 +380,20 @@ int my_cd(char *input) {
 int run(char *script) {
     int errCode = 0;
     struct PCB *newPCB;
-    FILE *p;
 
-    p = fopen(script, "rt");  // the program is in a file
-    if (p == NULL) {
-        errCode = badcommand(COMMAND_ERROR_FILE_INEXISTENT);
+    // First load the script into memory
+    // Here the FCFS policy is passed but it doesn't really matter
+    // because run is only executing one script
+    newPCB = mem_load_script(script, FCFS);
+
+    if (newPCB != NULL) {
+        // The schedulerRun function is passed the FCFS policy
+        // but it doesn't really matter because only one script
+        // is executing. The two other arguments are 0 (false),
+        // because run doesn't use background (#) or multithreading.
+        schedulerRun(FCFS, 0, 0);
     } else {
-        // First load the script into memory
-        // Here the FCFS policy is passed but it doesn't really matter
-        // because run is only executing one script
-        newPCB = mem_load_script(p, FCFS);
-
-        if (newPCB != NULL) {
-            // The schedulerRun function is passed the FCFS policy
-            // but it doesn't really matter because only one script
-            // is executing. The two other arguments are 0 (false),
-            // because run doesn't use background (#) or multithreading.
-            schedulerRun(FCFS, 0, 0);
-        } else {
-            errCode = badcommand(COMMAND_ERROR_MEM_LOAD_SCRIPT);
-        }
-
-        fclose(p);
+        errCode = badcommand(COMMAND_ERROR_FILE_INEXISTENT);
     }
 
     return errCode;
@@ -428,11 +419,11 @@ int exec(char *scripts[], int scripts_number, policy_t policy,
     int script_idx, errCode = 0, sameAs;
     struct PCB *pcbArray[2];
     struct PCB *currentPCB;
-    FILE *p;
 
     // Loading scripts into memory and checking for any errors
     for (script_idx = 0; script_idx < scripts_number; script_idx++) {
         sameAs = -1;    // Not the same as past script by default
+
         // Check if script is the same as one that was previously loaded
         if (script_idx > 0) {
             if (strcmp(scripts[0], scripts[script_idx]) == 0) {
@@ -443,34 +434,26 @@ int exec(char *scripts[], int scripts_number, policy_t policy,
         }
 
         if (sameAs == -1) {
-            p = fopen(scripts[script_idx], "rt");  // the program is in a file
-            // Check if file can be opened
-            if (p == NULL) {
-                return badcommand(COMMAND_ERROR_FILE_INEXISTENT);
-            }
-
             // Check for errors when loading the script
-            currentPCB = mem_load_script(p, policy);
+            currentPCB = mem_load_script(scripts[script_idx], policy);
             if (!currentPCB) {
-                return badcommand(COMMAND_ERROR_MEM_LOAD_SCRIPT);
+                return badcommand(COMMAND_ERROR_FILE_INEXISTENT);
             }
 
             // Only store the pcb if it's for one of the first two scripts for reuse
             if (script_idx < 2){
                 pcbArray[script_idx] = currentPCB;
             }
-
-            fclose(p);
         } else {
             // Create a new PCB with the same memory as the previous script
-            createPCB(policy, pcbArray[sameAs]->memoryStartIdx, pcbArray[sameAs]->lengthCode);
+            createPCB(policy, pcbArray[sameAs]->lengthCode, pcbArray[sameAs]->scriptInfo);
         }
     }
 
     // Loading main shell if isRunningInBackground (#) set to True
     if (isRunningInBackground) {
-        if (mem_load_script(stdin, INVALID_POLICY)) {
-            return badcommand(COMMAND_ERROR_MEM_LOAD_SCRIPT);
+        if (mem_load_script(NULL, INVALID_POLICY)) {
+            return badcommand(COMMAND_ERROR_FILE_INEXISTENT);
         }
         execOnlyLoading = 1;
     }
@@ -642,9 +625,6 @@ int badcommand(commandError_t errorCode) {
             break;
         case COMMAND_ERROR_CD:
             printf("Bad command: my_cd\n");
-            break;
-        case COMMAND_ERROR_MEM_LOAD_SCRIPT:
-            printf("Memory loading for script error: exec\n");
             break;
         default:
             break;
