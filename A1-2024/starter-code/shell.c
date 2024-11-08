@@ -24,7 +24,7 @@ int countChar(char input[], char search);
  * @return Returns an integer status code, 0 for success
  */
 int main(int argc, char *argv[]) {
-    printf("Shell version 1.3 created September 2024\n\n");
+    printf("Frame Store Size = %d; Variable Store Size = %d\n", FRAME_STORE_SIZE, VAR_MEMSIZE);
     // help();  //Not printing the help text anymore at start of shell
 
     char prompt = '$';               // Shell prompt
@@ -45,10 +45,9 @@ int main(int argc, char *argv[]) {
     scripts_memory_init();
 
     while (1) {
-        // In batch mode, check if eof is reached to switch back to interactive
-        // mode
+        // In batch mode, check if eof is reached in which case we quit
         if (feof(stdin)) {
-            freopen("/dev/tty", "r", stdin);
+            break;
         }
 
         // if print the prompt only if the stdin is pointing to terminal

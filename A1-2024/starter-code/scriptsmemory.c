@@ -1,7 +1,10 @@
 #include <pthread.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "shellmemory.h"
+#include "scriptsmemory.h"
+#include "shell.h"
 
 struct availableMemory {
     int memoryStartIdx;
@@ -10,9 +13,17 @@ struct availableMemory {
     struct availableMemory *prev;
 };
 
+struct frameMetaData {
+    struct scriptFrames *associatedScript;
+    int associatedPageNumber;
+    int LRU_idx;
+};
+
 pthread_mutex_t memoryAvailabilityDLLLock;
-char *shellmemoryCode[MEM_SIZE];
+char *shellmemoryCode[FRAME_STORE_SIZE];
 struct availableMemory *availableMemoryHead;
+
+struct frameMetaData framesMetadata[FRAME_NUMBER];
 
 /*** FUNCTIONS FOR SCRIPT MEMORY ***/
 
@@ -22,16 +33,23 @@ struct availableMemory *availableMemoryHead;
  */
 void scripts_memory_init() {
     // Initialize variable and code shellmemory
-    int mem_idx, val_idx;
-    for (mem_idx = 0; mem_idx < MEM_SIZE; mem_idx++) {
+    int mem_idx, frameIdx;
+    for (mem_idx = 0; mem_idx < VAR_MEMSIZE; mem_idx++) {
         shellmemoryCode[mem_idx] = NULL;
+    }
+
+    // Initialize frames metadata
+    // Note that the associated pageNumber doesn't need to be initialized
+    for (frameIdx = 0; frameIdx < FRAME_NUMBER; frameIdx++){
+        framesMetadata[frameIdx].associatedScript = NULL;
+        framesMetadata[frameIdx].LRU_idx = FRAME_NUMBER - frameIdx - 1;
     }
 
     // Initialize available memory
     availableMemoryHead =
         (struct availableMemory *)malloc(sizeof(struct availableMemory));
     availableMemoryHead->memoryStartIdx = 0;
-    availableMemoryHead->length = MEM_SIZE;
+    availableMemoryHead->length = VAR_MEMSIZE;
     availableMemoryHead->next = NULL;
     availableMemoryHead->prev = NULL;
 
@@ -163,8 +181,6 @@ void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
 
 /**
  * Fetches the instruction from shell memory at the specified address.
- * Note: this function is used in the scheduler.c file whenever a process
- * needs to execute instructions.
  * 
  * @param instructionAddress The address in shell memory from which to retrieve
  * the instruction.
@@ -172,6 +188,132 @@ void addMemoryAvailability(int memoryStartIdx, int lengthCode) {
  */
 char *fetchInstruction(int instructionAddress) {
     return shellmemoryCode[instructionAddress];
+}
+
+int virtualToPhysicalAddress(int instructionVirtualAddress, struct scriptFrames *scriptInfo){
+    int pageNumber, frameNumber, physicalAddress, rv = -1;
+
+    pageNumber = instructionVirtualAddress / PAGE_SIZE;
+    frameNumber = scriptInfo->pageTable[pageNumber];
+    if (frameNumber >= 0){
+        rv = frameNumber * 3 + (instructionVirtualAddress % PAGE_SIZE);
+    }
+    
+    return rv;
+}
+
+char *fetchInstructionVirtual(int instructionVirtualAddress, struct scriptFrames *scriptInfo) {
+    int physicalAddress;
+    char *rv;
+
+    physicalAddress = virtualToPhysicalAddress(instructionVirtualAddress, scriptInfo);
+    if (physicalAddress >= 0){
+        rv = shellmemoryCode[physicalAddress];
+    } else {
+        rv = NULL;
+    }
+
+    return rv;
+}
+
+void updateInstructionVirtual(int instructionVirtualAddress, struct scriptFrames *scriptInfo, char newInstruction[]) {
+    int physicalAddress;
+
+    physicalAddress = virtualToPhysicalAddress(instructionVirtualAddress, scriptInfo);
+    shellmemoryCode[physicalAddress] = newInstruction;
+}
+
+int findLRUFrame(){
+    int frameIdx;
+
+    for(frameIdx = 0; frameIdx < FRAME_NUMBER; frameIdx++){
+        if(framesMetadata[frameIdx].LRU_idx == FRAME_NUMBER - 1){
+            return frameIdx;
+        }
+    }
+}
+
+void updateLRURanking(int frameMostRecentlyUsed){
+    int frameIdx, oldRank;
+
+    oldRank = framesMetadata[frameMostRecentlyUsed].LRU_idx;
+
+    for(frameIdx = 0; frameIdx < FRAME_NUMBER; frameIdx++){
+        if(framesMetadata[frameIdx].LRU_idx < oldRank){
+            framesMetadata[frameIdx].LRU_idx++;
+        } else if(framesMetadata[frameIdx].LRU_idx == oldRank){
+            framesMetadata[frameIdx].LRU_idx = 0;
+        }
+    }
+}
+
+void declareVictimePage(int victimePage, struct scriptFrames *scriptInfo){
+    int pageOffset;
+    char *instruction;
+
+    printf("Page fault! Victim page contents:\n");
+    for(pageOffset = 0; pageOffset < PAGE_SIZE; pageOffset++){
+        instruction = fetchInstructionVirtual(victimePage * PAGE_SIZE + pageOffset, scriptInfo);
+        printf("%s\n", instruction);
+        free(instruction);
+    }
+    printf("End of victim page contents.\n");
+}
+
+void pageAssignment(int pageNumber, struct scriptFrames *scriptInfo) {
+    FILE *p;
+    int LRUFrame, pageIdx, pageOffsetIdx;
+    char line[MAX_USER_INPUT];
+
+    // First find the frame to use (LRU)
+    LRUFrame = findLRUFrame();
+    updateLRURanking(LRUFrame);
+
+    // If frame to use had a page then declare victim page and clean up
+    if (framesMetadata[LRUFrame].associatedScript){
+        // Declare the victim and free the memory allocated lines
+        declareVictimePage(framesMetadata[LRUFrame].associatedPageNumber, framesMetadata[LRUFrame].associatedScript);
+        
+        // Invalidate page in page table
+        framesMetadata[LRUFrame].associatedScript->pageTable[framesMetadata[LRUFrame].associatedPageNumber] = -1;
+
+        framesMetadata[LRUFrame].associatedScript->FramesInUse--;
+        // Special case where no frames or PCBs are using the script file anymore
+        // free the memory allocated for the scriptInformation
+        if(!framesMetadata[LRUFrame].associatedScript->PCBsInUse && !framesMetadata[LRUFrame].associatedScript->FramesInUse){
+            free(framesMetadata[LRUFrame].associatedScript->scriptName);
+            free(framesMetadata[LRUFrame].associatedScript);
+            framesMetadata[LRUFrame].associatedScript = NULL;
+        }
+    }
+
+    // Renew metaData to the frame
+    framesMetadata[LRUFrame].associatedScript = scriptInfo;
+    framesMetadata[LRUFrame].associatedScript->FramesInUse++;
+    framesMetadata[LRUFrame].associatedPageNumber = pageNumber;
+
+    // Validate pageTable of newly allocated page
+    framesMetadata[LRUFrame].associatedScript->pageTable[pageNumber] = LRUFrame;
+
+    // Write into memory the new page
+    p = fopen(scriptInfo->scriptName, "rt");  // the program is in a file
+
+    // Offset to current page
+    for(pageIdx = 0; pageIdx < pageNumber; pageIdx++){
+        for(pageOffsetIdx = 0; pageOffsetIdx < PAGE_SIZE; pageOffsetIdx++){
+            fgets(line, MAX_USER_INPUT - 1, p);
+        }
+    }
+
+    for(pageOffsetIdx = 0; pageOffsetIdx < PAGE_SIZE; pageOffsetIdx++){
+        fgets(line, MAX_USER_INPUT - 1, p);
+        updateInstructionVirtual(pageNumber * 3 + pageOffsetIdx, scriptInfo, strdup(line));
+        memset(line, 0, sizeof(line));
+        if (feof(p)) {
+            break;
+        }
+    }
+    fclose(p);
 }
 
 /**
