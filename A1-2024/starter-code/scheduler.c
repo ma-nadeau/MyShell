@@ -118,7 +118,7 @@ struct PCB *mem_load_script(char script[], policy_t policy) {
 
     // Assign the first few pages of the script to frames
     for (pageIdx = 0; pageIdx < PAGES_LOADED_NUMBER; pageIdx++){
-        pageAssignment(pageIdx, scriptInfo);
+        pageAssignment(pageIdx, scriptInfo, 1);
     }
 
     newPCB = createPCB(policy, scriptLength, scriptInfo);
@@ -199,13 +199,22 @@ struct PCB *createPCB(policy_t policy, int scriptLength, struct scriptFrames *sc
 void executeReadyQueuePCBs() {
     int line_idx;
     struct PCB *currentPCB;
+    char *instr;
 
+next_timeslice_execute:
     while ((currentPCB = popHeadFromPCBQueue())) {
         // Execute all lines of code
         for (line_idx = currentPCB->virtualAddress;
              line_idx < currentPCB->lengthCode;
              line_idx++, currentPCB->virtualAddress++) {
-            convertInputToOneLiners(fetchInstructionVirtual(line_idx, currentPCB->scriptInfo));
+                // Attempt to fetch next instruction
+                if (instr = fetchInstructionVirtual(line_idx, currentPCB->scriptInfo)){
+                    convertInputToOneLiners(instr);
+                } else { // Fix page fault and preempt the process
+                    pageAssignment(line_idx/PAGE_SIZE, currentPCB->scriptInfo, 0);
+                    placePCBAtEndOfDLL(currentPCB);
+                    goto next_timeslice_execute;
+                }
         }
         terminateProcess(currentPCB);
     }
@@ -221,9 +230,10 @@ void executeReadyQueuePCBs() {
  */
 void runRR(int lineNumber) {
     struct PCB *currentPCB;
-    int line_idx;
-    int programCounterTmp;
+    int line_idx, programCounterTmp;
+    char *instr;
 
+next_timeslice_RR:
     while ((currentPCB = popHeadFromPCBQueue())) {
         // Execute lineNumber lines of code
         programCounterTmp = currentPCB->virtualAddress;
@@ -231,7 +241,14 @@ void runRR(int lineNumber) {
              line_idx < currentPCB->lengthCode &&
              line_idx < programCounterTmp + lineNumber;
              line_idx++, currentPCB->virtualAddress++) {
-            convertInputToOneLiners(fetchInstructionVirtual(line_idx, currentPCB->scriptInfo));
+                // Attempt to fetch next instruction
+                if (instr = fetchInstructionVirtual(line_idx, currentPCB->scriptInfo)){
+                    convertInputToOneLiners(instr);
+                } else { // Fix page fault and preempt the process
+                    pageAssignment(line_idx/PAGE_SIZE, currentPCB->scriptInfo, 0);
+                    placePCBAtEndOfDLL(currentPCB);
+                    goto next_timeslice_RR;
+                }
         }
         // Check if process has finished running
         if (currentPCB->virtualAddress ==

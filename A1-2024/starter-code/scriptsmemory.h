@@ -19,4 +19,4 @@ char *fetchInstructionVirtual(int instructionVirtualAddress, struct scriptFrames
 void updateInstructionVirtual(int instructionVirtualAddress, struct scriptFrames *scriptInfo, char newInstruction[]);
 int allocateMemoryScript(int scriptLength);
 void addMemoryAvailability(int memoryStartIdx, int lengthCode);
-void pageAssignment(int pageNumber, struct scriptFrames *scriptInfo);
+void pageAssignment(int pageNumber, struct scriptFrames *scriptInfo, int setup);

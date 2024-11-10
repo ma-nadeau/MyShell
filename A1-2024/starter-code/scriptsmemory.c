@@ -34,7 +34,7 @@ struct frameMetaData framesMetadata[FRAME_NUMBER];
 void scripts_memory_init() {
     // Initialize variable and code shellmemory
     int mem_idx, frameIdx;
-    for (mem_idx = 0; mem_idx < VAR_MEMSIZE; mem_idx++) {
+    for (mem_idx = 0; mem_idx < FRAME_STORE_SIZE; mem_idx++) {
         shellmemoryCode[mem_idx] = NULL;
     }
 
@@ -49,7 +49,7 @@ void scripts_memory_init() {
     availableMemoryHead =
         (struct availableMemory *)malloc(sizeof(struct availableMemory));
     availableMemoryHead->memoryStartIdx = 0;
-    availableMemoryHead->length = VAR_MEMSIZE;
+    availableMemoryHead->length = FRAME_STORE_SIZE;
     availableMemoryHead->next = NULL;
     availableMemoryHead->prev = NULL;
 
@@ -202,6 +202,20 @@ int virtualToPhysicalAddress(int instructionVirtualAddress, struct scriptFrames 
     return rv;
 }
 
+void updateLRURanking(int frameMostRecentlyUsed){
+    int frameIdx, oldRank;
+
+    oldRank = framesMetadata[frameMostRecentlyUsed].LRU_idx;
+
+    for(frameIdx = 0; frameIdx < FRAME_NUMBER; frameIdx++){
+        if(framesMetadata[frameIdx].LRU_idx < oldRank){
+            framesMetadata[frameIdx].LRU_idx++;
+        } else if(framesMetadata[frameIdx].LRU_idx == oldRank){
+            framesMetadata[frameIdx].LRU_idx = 0;
+        }
+    }
+}
+
 char *fetchInstructionVirtual(int instructionVirtualAddress, struct scriptFrames *scriptInfo) {
     int physicalAddress;
     char *rv;
@@ -209,6 +223,7 @@ char *fetchInstructionVirtual(int instructionVirtualAddress, struct scriptFrames
     physicalAddress = virtualToPhysicalAddress(instructionVirtualAddress, scriptInfo);
     if (physicalAddress >= 0){
         rv = shellmemoryCode[physicalAddress];
+        updateLRURanking(physicalAddress/PAGE_SIZE);
     } else {
         rv = NULL;
     }
@@ -233,34 +248,20 @@ int findLRUFrame(){
     }
 }
 
-void updateLRURanking(int frameMostRecentlyUsed){
-    int frameIdx, oldRank;
-
-    oldRank = framesMetadata[frameMostRecentlyUsed].LRU_idx;
-
-    for(frameIdx = 0; frameIdx < FRAME_NUMBER; frameIdx++){
-        if(framesMetadata[frameIdx].LRU_idx < oldRank){
-            framesMetadata[frameIdx].LRU_idx++;
-        } else if(framesMetadata[frameIdx].LRU_idx == oldRank){
-            framesMetadata[frameIdx].LRU_idx = 0;
-        }
-    }
-}
-
 void declareVictimePage(int victimePage, struct scriptFrames *scriptInfo){
     int pageOffset;
     char *instruction;
 
-    printf("Page fault! Victim page contents:\n");
+    printf("Page fault! Victim page contents:\n\n");
     for(pageOffset = 0; pageOffset < PAGE_SIZE; pageOffset++){
         instruction = fetchInstructionVirtual(victimePage * PAGE_SIZE + pageOffset, scriptInfo);
-        printf("%s\n", instruction);
+        printf("%s", instruction);
         free(instruction);
     }
-    printf("End of victim page contents.\n");
+    printf("\nEnd of victim page contents.\n");
 }
 
-void pageAssignment(int pageNumber, struct scriptFrames *scriptInfo) {
+void pageAssignment(int pageNumber, struct scriptFrames *scriptInfo, int setup) {
     FILE *p;
     int LRUFrame, pageIdx, pageOffsetIdx;
     char line[MAX_USER_INPUT];
@@ -285,6 +286,8 @@ void pageAssignment(int pageNumber, struct scriptFrames *scriptInfo) {
             free(framesMetadata[LRUFrame].associatedScript);
             framesMetadata[LRUFrame].associatedScript = NULL;
         }
+    } else if (!setup){
+        printf("Page fault!\n");
     }
 
     // Renew metaData to the frame
