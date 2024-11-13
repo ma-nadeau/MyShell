@@ -97,13 +97,18 @@ int findLRUFrame(){
 
 void declareVictimePage(int victimePage, struct scriptFrames *scriptInfo){
     int pageOffset;
+    int virtualAddress;
     char *instruction;
 
     printf("Page fault! Victim page contents:\n\n");
     for(pageOffset = 0; pageOffset < PAGE_SIZE; pageOffset++){
-        instruction = fetchInstructionVirtual(victimePage * PAGE_SIZE + pageOffset, scriptInfo);
-        printf("%s", instruction);
-        free(instruction);
+        virtualAddress = victimePage * PAGE_SIZE + pageOffset;
+        instruction = fetchInstructionVirtual(virtualAddress, scriptInfo);
+        if (instruction) {
+            printf("%s", instruction);
+            free(instruction);
+            updateInstructionVirtual(virtualAddress, scriptInfo, NULL);
+        }
     }
     printf("\nEnd of victim page contents.\n");
 }
