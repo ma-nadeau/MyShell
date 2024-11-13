@@ -9,6 +9,7 @@
 
 struct scriptFrames {
     char *scriptName;
+    int lengthCode;
     int pageTable[PAGE_TABLE_SIZE];
     int PCBsInUse;
     int FramesInUse;
@@ -17,6 +18,5 @@ struct scriptFrames {
 void scripts_memory_init();
 char *fetchInstructionVirtual(int instructionVirtualAddress, struct scriptFrames *scriptInfo);
 void updateInstructionVirtual(int instructionVirtualAddress, struct scriptFrames *scriptInfo, char newInstruction[]);
-int allocateMemoryScript(int scriptLength);
-void addMemoryAvailability(int memoryStartIdx, int lengthCode);
 void pageAssignment(int pageNumber, struct scriptFrames *scriptInfo, int setup);
+struct scriptFrames *findExistingScript(char script[]);

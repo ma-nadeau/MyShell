@@ -70,6 +70,7 @@ void scheduler_init() {
  * @return void This function does not return a value.
  */
 void terminateProcess(struct PCB *pcb) {
+    pcb->scriptInfo->PCBsInUse--;
     free(pcb);
 }
 
@@ -79,10 +80,9 @@ void terminateProcess(struct PCB *pcb) {
  * @param p A pointer to the FILE object representing the script to be loaded.
  * @return Returns a pointer to the newly created PCB or Null for an error
  */
-struct PCB *mem_load_script(char script[], policy_t policy) {
+int mem_load_script(char script[], policy_t policy) {
     char line[MAX_USER_INPUT];
     int scriptLength = 0, line_idx, mem_idx, pageIdx;
-    struct PCB *newPCB;
     FILE *p;
     
     if (!script){
@@ -93,7 +93,7 @@ struct PCB *mem_load_script(char script[], policy_t policy) {
 
     // Make sure the given File is valid
     if (p == NULL) {
-        return NULL;
+        return -1;
     }
 
     // Count the number of lines in the script
@@ -110,6 +110,7 @@ struct PCB *mem_load_script(char script[], policy_t policy) {
     // Initialize the page table and related information
     struct scriptFrames *scriptInfo = (struct scriptFrames *)malloc(sizeof(struct scriptFrames));
     scriptInfo->scriptName = strdup(script);
+    scriptInfo->lengthCode = scriptLength;
     scriptInfo->PCBsInUse = 0;
     scriptInfo->FramesInUse = 0;
     for(pageIdx = 0; pageIdx < PAGE_TABLE_SIZE; pageIdx++){
@@ -121,9 +122,9 @@ struct PCB *mem_load_script(char script[], policy_t policy) {
         pageAssignment(pageIdx, scriptInfo, 1);
     }
 
-    newPCB = createPCB(policy, scriptLength, scriptInfo);
+    createPCB(policy, scriptInfo);
     
-    return newPCB;
+    return 0;
 }
 
 /**
@@ -135,15 +136,14 @@ struct PCB *mem_load_script(char script[], policy_t policy) {
     
     @return A pointer to the newly created PCB.
 */
-struct PCB *createPCB(policy_t policy, int scriptLength, struct scriptFrames *scriptInfo){
+void createPCB(policy_t policy, struct scriptFrames *scriptInfo){
     struct PCB *newPCB;
     int pageIdx;
 
     // Initialize new PCB for new process being created
     newPCB = (struct PCB *)malloc(sizeof(struct PCB));
     newPCB->pid = rand();
-    newPCB->lengthCode = scriptLength;
-    newPCB->lengthScore = scriptLength;
+    newPCB->lengthScore = scriptInfo->lengthCode;
     newPCB->virtualAddress = 0;
     newPCB->scriptInfo = scriptInfo;
     newPCB->scriptInfo->PCBsInUse++;
@@ -184,8 +184,6 @@ struct PCB *createPCB(policy_t policy, int scriptLength, struct scriptFrames *sc
         }
     }
     pthread_mutex_unlock(&readyQueueLock);
-
-    return newPCB;
 }
 
 /*** FUNCTIONS FOR EXECUTING THE SCRIPTS ***/
@@ -196,7 +194,7 @@ struct PCB *createPCB(policy_t policy, int scriptLength, struct scriptFrames *sc
  * head, head->next, ..., tail).
  * This function is used for FCFS, and SJF
  */
-void executeReadyQueuePCBs() {
+void executeReadyQueuePCBs(policy_t policy) {
     int line_idx;
     struct PCB *currentPCB;
     char *instr;
@@ -205,14 +203,18 @@ next_timeslice_execute:
     while ((currentPCB = popHeadFromPCBQueue())) {
         // Execute all lines of code
         for (line_idx = currentPCB->virtualAddress;
-             line_idx < currentPCB->lengthCode;
+             line_idx < currentPCB->scriptInfo->lengthCode;
              line_idx++, currentPCB->virtualAddress++) {
                 // Attempt to fetch next instruction
                 if (instr = fetchInstructionVirtual(line_idx, currentPCB->scriptInfo)){
                     convertInputToOneLiners(instr);
                 } else { // Fix page fault and preempt the process
                     pageAssignment(line_idx/PAGE_SIZE, currentPCB->scriptInfo, 0);
-                    placePCBAtEndOfDLL(currentPCB);
+                    if (policy == FCFS){
+                        placePCBAtEndOfDLL(currentPCB);
+                    } else {
+                        insertPCBFromTailSJF(currentPCB);
+                    }
                     goto next_timeslice_execute;
                 }
         }
@@ -238,7 +240,7 @@ next_timeslice_RR:
         // Execute lineNumber lines of code
         programCounterTmp = currentPCB->virtualAddress;
         for (line_idx = currentPCB->virtualAddress;
-             line_idx < currentPCB->lengthCode &&
+             line_idx < currentPCB->scriptInfo->lengthCode &&
              line_idx < programCounterTmp + lineNumber;
              line_idx++, currentPCB->virtualAddress++) {
                 // Attempt to fetch next instruction
@@ -252,7 +254,7 @@ next_timeslice_RR:
         }
         // Check if process has finished running
         if (currentPCB->virtualAddress ==
-            currentPCB->lengthCode) {
+            currentPCB->scriptInfo->lengthCode) {
             terminateProcess(currentPCB);
         } else {
             placePCBAtEndOfDLL(currentPCB);
@@ -269,11 +271,20 @@ next_timeslice_RR:
 void runAging() {
     struct PCB *currentPCB, *tmp, *smallest, *currentHead;
     int line_idx, programCounterTmp, needToSwitch = 0;
+    char *instr;
 
     currentPCB = popHeadFromPCBQueue();
     while (currentPCB) {
         // Time slice
-        convertInputToOneLiners(fetchInstructionVirtual(currentPCB->virtualAddress, currentPCB->scriptInfo));
+        // Attempt to fetch next instruction
+        if (instr = fetchInstructionVirtual(currentPCB->virtualAddress, currentPCB->scriptInfo)){
+            convertInputToOneLiners(instr);
+        } else { // Fix page fault and preempt the process
+            pageAssignment(currentPCB->virtualAddress/PAGE_SIZE, currentPCB->scriptInfo, 0);
+            insertPCBFromTailSJF(currentPCB);
+            currentPCB = popHeadFromPCBQueue();
+            continue;
+        }
         currentPCB->virtualAddress++;
 
         // Aging all processes
@@ -290,7 +301,7 @@ void runAging() {
 
         // Check if process has stopped running
         if (currentPCB->virtualAddress ==
-            currentPCB->lengthCode) {
+            currentPCB->scriptInfo->lengthCode) {
             terminateProcess(currentPCB);
             currentPCB = popHeadFromPCBQueue();
         } else {  // Preempt the head if it has a bigger score than other
@@ -323,7 +334,7 @@ void selectSchedule(policy_t policy) {
         // when inserting, it becomes the same as FCFS
         case FCFS:
         case SJF:
-            executeReadyQueuePCBs();
+            executeReadyQueuePCBs(policy);
             break;
         case RR:
             runRR(2);

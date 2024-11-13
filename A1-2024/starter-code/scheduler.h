@@ -15,7 +15,6 @@ typedef enum policy_t {
 
 struct PCB {
     int pid;
-    int lengthCode;
     int lengthScore;
     int virtualAddress;
     struct scriptFrames *scriptInfo;
@@ -29,8 +28,8 @@ extern pthread_cond_t finishedWorkCond;
 
 
 void scheduler_init();
-struct PCB *mem_load_script(char script[], policy_t policy);
+int mem_load_script(char script[], policy_t policy);
 void schedulerRun(policy_t policy, int isRunningBackground, int isRunningInBackground);
 void joinAllThreads();
 int isMainThread(pthread_t runningPthread);
-struct PCB *createPCB(policy_t policy, int scriptLength, struct scriptFrames *scriptInfo);
+void createPCB(policy_t policy, struct scriptFrames *scriptInfo);

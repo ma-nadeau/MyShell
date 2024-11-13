@@ -10,6 +10,7 @@
 #include "scheduler.h"
 #include "shell.h"
 #include "shellmemory.h"
+#include "scriptsmemory.h"
 
 // Max arg size for a single command (name of the command inclusive)
 int MAX_ARGS_SIZE = 7;
@@ -380,13 +381,16 @@ int my_cd(char *input) {
 int run(char *script) {
     int errCode = 0;
     struct PCB *newPCB;
+    struct scriptFrames *scriptInfo;
 
-    // First load the script into memory
-    // Here the FCFS policy is passed but it doesn't really matter
-    // because run is only executing one script
-    newPCB = mem_load_script(script, FCFS);
-
-    if (newPCB != NULL) {
+    scriptInfo = findExistingScript(script);
+    if (scriptInfo){
+        createPCB(FCFS, scriptInfo);
+    } else {
+        errCode = mem_load_script(script, FCFS);
+    }
+    
+    if (!errCode) {
         // The schedulerRun function is passed the FCFS policy
         // but it doesn't really matter because only one script
         // is executing. The two other arguments are 0 (false),
@@ -417,36 +421,20 @@ int run(char *script) {
 int exec(char *scripts[], int scripts_number, policy_t policy,
          int isRunningInBackground, int isRunningConcurrently) {
     int script_idx, errCode = 0, sameAs;
-    struct PCB *pcbArray[2];
-    struct PCB *currentPCB;
+    struct scriptFrames *scriptInfo;
 
     // Loading scripts into memory and checking for any errors
     for (script_idx = 0; script_idx < scripts_number; script_idx++) {
-        sameAs = -1;    // Not the same as past script by default
+        scriptInfo = findExistingScript(scripts[script_idx]);
 
-        // Check if script is the same as one that was previously loaded
-        if (script_idx > 0) {
-            if (strcmp(scripts[0], scripts[script_idx]) == 0) {
-                sameAs = 0;
-            } else if(script_idx > 1 && strcmp(scripts[1], scripts[script_idx]) == 0) {
-                sameAs = 1;
-            }
-        }
-
-        if (sameAs == -1) {
+        if (!scriptInfo) {
             // Check for errors when loading the script
-            currentPCB = mem_load_script(scripts[script_idx], policy);
-            if (!currentPCB) {
+            if (mem_load_script(scripts[script_idx], policy)) {
                 return badcommand(COMMAND_ERROR_FILE_INEXISTENT);
-            }
-
-            // Only store the pcb if it's for one of the first two scripts for reuse
-            if (script_idx < 2){
-                pcbArray[script_idx] = currentPCB;
             }
         } else {
             // Create a new PCB with the same memory as the previous script
-            createPCB(policy, pcbArray[sameAs]->lengthCode, pcbArray[sameAs]->scriptInfo);
+            createPCB(policy, scriptInfo);
         }
     }
 
