@@ -61,8 +61,7 @@ void scheduler_init() {
 }
 
 /**
- * Deallocates the memory occupied by a script associated with the given
- * PCB.This function frees the memory that was allocated for the script linked
+ * This function frees the memory that was allocated for the script linked
  * to the specified process control block (PCB).
  *
  * @param pcb A pointer to the PCB structure that contains the script whose
@@ -75,16 +74,18 @@ void terminateProcess(struct PCB *pcb) {
 }
 
 /**
- * This function takes a file pointer to a script file and creates a process for it.
+ * This function takes the name of a script file and creates a process for it.
  *
- * @param p A pointer to the FILE object representing the script to be loaded.
- * @return Returns a pointer to the newly created PCB or Null for an error
+ * @param script A pointer to the name of the script to be loaded.
+ * @return Returns a non-null integer for an error and 0 otherwise
  */
 int mem_load_script(char script[], policy_t policy) {
     char line[MAX_USER_INPUT];
     int scriptLength = 0, line_idx, mem_idx, pageIdx;
     FILE *p;
     
+    // A null script signals that the stdin (background execution)
+    // is to be loaded
     if (!script){
         p = stdin;
     } else{
@@ -128,13 +129,10 @@ int mem_load_script(char script[], policy_t policy) {
 }
 
 /**
-    Creates a new PCB for a process and inserts it into the ready queue.
-    
-    @param policy The scheduling policy to be used.
-    @param mem_idx The index in the shell memory where the script is stored.
-    @param scriptLength The length of the script.
-    
-    @return A pointer to the newly created PCB.
+ * Creates a new PCB for a process and inserts it into the ready queue.
+ * 
+ * @param policy The scheduling policy to be used.
+ * @param scriptInfo The struct containing the page table associated with a script
 */
 void createPCB(policy_t policy, struct scriptFrames *scriptInfo){
     struct PCB *newPCB;
@@ -193,6 +191,8 @@ void createPCB(policy_t policy, struct scriptFrames *scriptInfo){
  * (PCBs) and executes each PCB one after the other starting at the head (i.e.,
  * head, head->next, ..., tail).
  * This function is used for FCFS, and SJF
+ * 
+ * @param policy The scheduling policy to determine how to insert preempted PCBs back in the queue
  */
 void executeReadyQueuePCBs(policy_t policy) {
     int line_idx;
@@ -210,6 +210,8 @@ next_timeslice_execute:
                     convertInputToOneLiners(instr);
                 } else { // Fix page fault and preempt the process
                     pageAssignment(line_idx/PAGE_SIZE, currentPCB->scriptInfo, 0);
+
+                    // Reinsert preempted page faulted PCBs depending on policy
                     if (policy == FCFS){
                         placePCBAtEndOfDLL(currentPCB);
                     } else {
@@ -228,7 +230,6 @@ next_timeslice_execute:
  * specified line number.
  *
  * @param lineNumber The number of line to execute before switching processes.
- * @return void
  */
 void runRR(int lineNumber) {
     struct PCB *currentPCB;
@@ -265,8 +266,6 @@ next_timeslice_RR:
 /**
  *Executes the Aging scheduling policy.This function implements the Aging
  *scheduling algorithm for the process in the readyQueue
- *
- * @return void
  */
 void runAging() {
     struct PCB *currentPCB, *tmp, *smallest, *currentHead;
@@ -404,8 +403,6 @@ void *workerThread(void *args) {
  * should execute in the background. (1 if True, 0 if False)
  * @param isRunningConcurrently An integer flag indicating if processes should
  * run concurrently. (1 if True, 0 if False)
- *
- * @return void
  */
 void schedulerRun(policy_t policy, int isRunningBackground,
                   int isRunningConcurrently) {

@@ -383,10 +383,13 @@ int run(char *script) {
     struct PCB *newPCB;
     struct scriptFrames *scriptInfo;
 
+    // First we check to see if in another exec or run command
+    // the file was already loaded in memory
     scriptInfo = findExistingScript(script);
+    // In which case we don't reload it
     if (scriptInfo){
         createPCB(FCFS, scriptInfo);
-    } else {
+    } else { // Otherwise we load the script
         errCode = mem_load_script(script, FCFS);
     }
     
@@ -425,6 +428,8 @@ int exec(char *scripts[], int scripts_number, policy_t policy,
 
     // Loading scripts into memory and checking for any errors
     for (script_idx = 0; script_idx < scripts_number; script_idx++) {
+        // First we check to see if in another exec or run command
+        // the file was already loaded in memory
         scriptInfo = findExistingScript(scripts[script_idx]);
 
         if (!scriptInfo) {
