@@ -44,8 +44,10 @@ void mem_init() {
  * values with the given variable name in memory. The number of values is
  * specified by the 'number_values' parameter.
  *
- * @param var_in A pointer to a string representing the variable name (key) to be set.
- * @param values_in An array of strings representing the values to be associated with the variable.
+ * @param var_in A pointer to a string representing the variable name (key) to
+ * be set.
+ * @param values_in An array of strings representing the values to be associated
+ * with the variable.
  * @param number_values The number of values in the `values_in` array.
  */
 void mem_set_value(char *var_in, char *values_in[], int number_values) {
@@ -59,7 +61,8 @@ void mem_set_value(char *var_in, char *values_in[], int number_values) {
         // corresponds to the variable passed as argument
         if (shellmemory[mem_idx].var == NULL ||
             strcmp(shellmemory[mem_idx].var, var_in) == 0) {
-            if (shellmemory[mem_idx].var == NULL) {  // Case where we reached end of known variables
+            // Case where we reached end of known variables
+            if (shellmemory[mem_idx].var ==NULL) {
                 // Create our new variable in this spot
                 shellmemory[mem_idx].var = strdup(var_in);
             } else {  // Case where variable already existed
@@ -84,8 +87,10 @@ void mem_set_value(char *var_in, char *values_in[], int number_values) {
  * corresponding index in memory. It returns the index if the variable is found,
  * or -1 if the variable does not exist in memory.
  *
- * @param var_in A pointer to a string representing the variable name to be searched.
- * @return Returns the index of the variable entry on success, or -1 if the variable is not found.
+ * @param var_in A pointer to a string representing the variable name to be
+ * searched.
+ * @return Returns the index of the variable entry on success, or -1 if the
+ * variable is not found.
  */
 int mem_get_variable_index(char *var_in) {
     int mem_idx, val_idx, ret_idx = -1;
@@ -111,7 +116,8 @@ int mem_get_variable_index(char *var_in) {
  * This function takes an input key (variable name) and retrieves its
  * corresponding value from memory, storing the result in the provided buffer.
  *
- * @param var_in A pointer to a string representing the input key (variable name).
+ * @param var_in A pointer to a string representing the input key (variable
+ * name).
  * @param buffer A pointer to a buffer where the retrieved value will be stored.
  */
 void mem_get_value(char *var_in, char *buffer) {
@@ -128,7 +134,8 @@ void mem_get_value(char *var_in, char *buffer) {
         val_idx = 0;
         pthread_mutex_lock(&memoryVariableArrayLock);
         while (val_idx < MAX_VALUE_SIZE && shellmemory[mem_idx].value[val_idx] != NULL) {
-            // Adding space between the values of a variable when outputting them
+            // Adding space between the values of a variable when outputting
+            // them
             if (val_idx != 0) {
                 strcat(buffer, space);
             }
@@ -141,7 +148,6 @@ void mem_get_value(char *var_in, char *buffer) {
 }
 
 /*** HELPER FUNCTIONS ***/
-
 
 /**
  * This function takes the memory index of a variable and clears its value,

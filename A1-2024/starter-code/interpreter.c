@@ -8,9 +8,9 @@
 #include <unistd.h>
 
 #include "scheduler.h"
+#include "scriptsmemory.h"
 #include "shell.h"
 #include "shellmemory.h"
-#include "scriptsmemory.h"
 
 // Max arg size for a single command (name of the command inclusive)
 int MAX_ARGS_SIZE = 7;
@@ -145,7 +145,7 @@ int interpreter(char *command_args[], int args_size) {
  * Function implementing the help command
  * which prints the list of commands available to the user
  * that the shell provides.
- * 
+ *
  * @return Returns an integer indicating success (0)
  */
 int help() {
@@ -165,7 +165,7 @@ run SCRIPT.TXT		Executes the file SCRIPT.TXT\n ";
  * Note that depending on whether a worker thread or the main thread is calling
  * quit the behaviour differs. Worker threads can only signal the main thread to
  * exit while the main shell immediately starts the exit procedure.
- * 
+ *
  * @return Returns an integer indicating success (0)
  */
 int quit() {
@@ -318,7 +318,7 @@ int my_touch(char *input) {
 /**
  * Function implementing the mkdir command which creates a new directory named
  * after the given argument.
- * 
+ *
  * @param input A pointer to the string representing the name of the directory
  * to be created.
  * @return Returns an integer indicating success (0) or non-zero on failure
@@ -387,12 +387,12 @@ int run(char *script) {
     // the file was already loaded in memory
     scriptInfo = findExistingScript(script);
     // In which case we don't reload it
-    if (scriptInfo){
+    if (scriptInfo) {
         createPCB(FCFS, scriptInfo);
-    } else { // Otherwise we load the script
+    } else {  // Otherwise we load the script
         errCode = mem_load_script(script, FCFS);
     }
-    
+
     if (!errCode) {
         // The schedulerRun function is passed the FCFS policy
         // but it doesn't really matter because only one script
@@ -595,7 +595,7 @@ policy_t policy_parser(char policy_str[]) {
 
 /**
  * Helper function that manages error messages for the interpreter
- * 
+ *
  * @param errorCode The error code indicating the type of command error
  * encountered.
  * @return Returns an integer indicating the status of the error handling

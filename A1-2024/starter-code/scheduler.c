@@ -83,12 +83,12 @@ int mem_load_script(char script[], policy_t policy) {
     char line[MAX_USER_INPUT];
     int scriptLength = 0, line_idx, mem_idx, pageIdx;
     FILE *p;
-    
+
     // A null script signals that the stdin (background execution)
     // is to be loaded
-    if (!script){
+    if (!script) {
         p = stdin;
-    } else{
+    } else {
         p = fopen(script, "rt");  // the program is in a file
     }
 
@@ -114,27 +114,28 @@ int mem_load_script(char script[], policy_t policy) {
     scriptInfo->lengthCode = scriptLength;
     scriptInfo->PCBsInUse = 0;
     scriptInfo->FramesInUse = 0;
-    for(pageIdx = 0; pageIdx < PAGE_TABLE_SIZE; pageIdx++){
+    for (pageIdx = 0; pageIdx < PAGE_TABLE_SIZE; pageIdx++) {
         scriptInfo->pageTable[pageIdx] = -1;
     }
 
     // Assign the first few pages of the script to frames
-    for (pageIdx = 0; pageIdx < PAGES_LOADED_NUMBER; pageIdx++){
+    for (pageIdx = 0; pageIdx < PAGES_LOADED_NUMBER; pageIdx++) {
         pageAssignment(pageIdx, scriptInfo, 1);
     }
 
     createPCB(policy, scriptInfo);
-    
+
     return 0;
 }
 
 /**
  * Creates a new PCB for a process and inserts it into the ready queue.
- * 
+ *
  * @param policy The scheduling policy to be used.
- * @param scriptInfo The struct containing the page table associated with a script
-*/
-void createPCB(policy_t policy, struct scriptFrames *scriptInfo){
+ * @param scriptInfo The struct containing the page table associated with a
+ * script
+ */
+void createPCB(policy_t policy, struct scriptFrames *scriptInfo) {
     struct PCB *newPCB;
     int pageIdx;
 
@@ -163,13 +164,13 @@ void createPCB(policy_t policy, struct scriptFrames *scriptInfo){
             readyQueue.tail = readyQueue.head;
             readyQueue.tail->next = NULL;
         }
-    // For the SJF and AGING policy, the PCB is inserted
-    // by comparing the "lengthScore" so that the PCB
-    // with min. lengthScore is at the head of the queue
+        // For the SJF and AGING policy, the PCB is inserted
+        // by comparing the "lengthScore" so that the PCB
+        // with min. lengthScore is at the head of the queue
     } else if (policy == SJF || policy == AGING) {
         insertPCBFromTailSJF(newPCB);
-    // In all the other cases (RR, FCFS), the PCB is inserted
-    // at the end of the queue
+        // In all the other cases (RR, FCFS), the PCB is inserted
+        // at the end of the queue
     } else {
         if (readyQueue.tail) {
             readyQueue.tail->next = newPCB;
@@ -191,8 +192,9 @@ void createPCB(policy_t policy, struct scriptFrames *scriptInfo){
  * (PCBs) and executes each PCB one after the other starting at the head (i.e.,
  * head, head->next, ..., tail).
  * This function is used for FCFS, and SJF
- * 
- * @param policy The scheduling policy to determine how to insert preempted PCBs back in the queue
+ *
+ * @param policy The scheduling policy to determine how to insert preempted PCBs
+ * back in the queue
  */
 void executeReadyQueuePCBs(policy_t policy) {
     int line_idx;
@@ -205,20 +207,20 @@ next_timeslice_execute:
         for (line_idx = currentPCB->virtualAddress;
              line_idx < currentPCB->scriptInfo->lengthCode;
              line_idx++, currentPCB->virtualAddress++) {
-                // Attempt to fetch next instruction
-                if (instr = fetchInstructionVirtual(line_idx, currentPCB->scriptInfo)){
-                    convertInputToOneLiners(instr);
-                } else { // Fix page fault and preempt the process
-                    pageAssignment(line_idx/PAGE_SIZE, currentPCB->scriptInfo, 0);
+            // Attempt to fetch next instruction
+            if (instr = fetchInstructionVirtual(line_idx, currentPCB->scriptInfo)) {
+                convertInputToOneLiners(instr);
+            } else {  // Fix page fault and preempt the process
+                pageAssignment(line_idx / PAGE_SIZE, currentPCB->scriptInfo, 0);
 
-                    // Reinsert preempted page faulted PCBs depending on policy
-                    if (policy == FCFS){
-                        placePCBAtEndOfDLL(currentPCB);
-                    } else {
-                        insertPCBFromTailSJF(currentPCB);
-                    }
-                    goto next_timeslice_execute;
+                // Reinsert preempted page faulted PCBs depending on policy
+                if (policy == FCFS) {
+                    placePCBAtEndOfDLL(currentPCB);
+                } else {
+                    insertPCBFromTailSJF(currentPCB);
                 }
+                goto next_timeslice_execute;
+            }
         }
         terminateProcess(currentPCB);
     }
@@ -244,18 +246,17 @@ next_timeslice_RR:
              line_idx < currentPCB->scriptInfo->lengthCode &&
              line_idx < programCounterTmp + lineNumber;
              line_idx++, currentPCB->virtualAddress++) {
-                // Attempt to fetch next instruction
-                if (instr = fetchInstructionVirtual(line_idx, currentPCB->scriptInfo)){
-                    convertInputToOneLiners(instr);
-                } else { // Fix page fault and preempt the process
-                    pageAssignment(line_idx/PAGE_SIZE, currentPCB->scriptInfo, 0);
-                    placePCBAtEndOfDLL(currentPCB);
-                    goto next_timeslice_RR;
-                }
+            // Attempt to fetch next instruction
+            if (instr = fetchInstructionVirtual(line_idx, currentPCB->scriptInfo)) {
+                convertInputToOneLiners(instr);
+            } else {  // Fix page fault and preempt the process
+                pageAssignment(line_idx / PAGE_SIZE, currentPCB->scriptInfo, 0);
+                placePCBAtEndOfDLL(currentPCB);
+                goto next_timeslice_RR;
+            }
         }
         // Check if process has finished running
-        if (currentPCB->virtualAddress ==
-            currentPCB->scriptInfo->lengthCode) {
+        if (currentPCB->virtualAddress == currentPCB->scriptInfo->lengthCode) {
             terminateProcess(currentPCB);
         } else {
             placePCBAtEndOfDLL(currentPCB);
@@ -276,10 +277,11 @@ void runAging() {
     while (currentPCB) {
         // Time slice
         // Attempt to fetch next instruction
-        if (instr = fetchInstructionVirtual(currentPCB->virtualAddress, currentPCB->scriptInfo)){
+        if (instr = fetchInstructionVirtual(currentPCB->virtualAddress, currentPCB->scriptInfo)) {
             convertInputToOneLiners(instr);
-        } else { // Fix page fault and preempt the process
-            pageAssignment(currentPCB->virtualAddress/PAGE_SIZE, currentPCB->scriptInfo, 0);
+        } else {  // Fix page fault and preempt the process
+            pageAssignment(currentPCB->virtualAddress / PAGE_SIZE,
+                           currentPCB->scriptInfo, 0);
             insertPCBFromTailSJF(currentPCB);
             currentPCB = popHeadFromPCBQueue();
             continue;
@@ -299,8 +301,7 @@ void runAging() {
         pthread_mutex_unlock(&readyQueueLock);
 
         // Check if process has stopped running
-        if (currentPCB->virtualAddress ==
-            currentPCB->scriptInfo->lengthCode) {
+        if (currentPCB->virtualAddress == currentPCB->scriptInfo->lengthCode) {
             terminateProcess(currentPCB);
             currentPCB = popHeadFromPCBQueue();
         } else {  // Preempt the head if it has a bigger score than other
@@ -349,9 +350,9 @@ void selectSchedule(policy_t policy) {
 
 /**
  * The main function for the worker thread. This function runs in a loop,
- * waiting for work to be available via condition variables. When work is signaled, it
- * selects the scheduling policy to manage process execution. The loop continues
- * until a termination signal is received.
+ * waiting for work to be available via condition variables. When work is
+ * signaled, it selects the scheduling policy to manage process execution. The
+ * loop continues until a termination signal is received.
  */
 void *workerThread(void *args) {
     int startWorkerExitProcedure = 0;
@@ -447,7 +448,6 @@ void schedulerRun(policy_t policy, int isRunningBackground,
         }
         pthread_mutex_unlock(&finishedWorkLock);
 
-        
         if (startMainExitProcedure) {
             joinAllThreads();
             exit(0);
@@ -482,7 +482,7 @@ void joinAllThreads() {
     }
 }
 
-/** 
+/**
  * This predicate function returns whether the runningPthread is the main thread
  *
  * @param runningPthread The thread ID (of type pthread_t) to check.
@@ -556,7 +556,7 @@ void insertPCBFromTailSJF(struct PCB *pcb) {
  * ready queue and reattaches the previous and next nodes (if any) together.
  *
  * @param pcb A pointer to the PCB to be removed from the queue.
- * 
+ *
  * @return void
  */
 void detachPCBFromQueue(struct PCB *pcb) {
@@ -570,14 +570,14 @@ void detachPCBFromQueue(struct PCB *pcb) {
             // If not then update the tail
             readyQueue.tail = NULL;
         }
-    // Case where pcb is at the tail
+        // Case where pcb is at the tail
     } else if (readyQueue.tail == pcb) {
         readyQueue.tail = readyQueue.tail->prev;
 
         if (readyQueue.tail) {
             readyQueue.tail->next = NULL;
         }
-    // Generic case where pcb is in the middle of the queue
+        // Generic case where pcb is in the middle of the queue
     } else {
         pcb->prev->next = pcb->next;
         pcb->next->prev = pcb->prev;
@@ -625,7 +625,7 @@ void placePCBAtEndOfDLL(struct PCB *pcb) {
         readyQueue.tail = pcb;
         pcb->next = NULL;
         pcb->prev = NULL;
-    // Update the tail only otherwise
+        // Update the tail only otherwise
     } else {
         readyQueue.tail->next = pcb;
         pcb->prev = readyQueue.tail;

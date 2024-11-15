@@ -157,7 +157,8 @@ int wordEnding(char c) { return c == '\0' || c == '\n' || c == ' '; }
  *
  * @param input A string in which to count occurrences of the character.
  * @param search The character to search from within the input string.
- * @return Returns the number of times the specified character appears in the string.
+ * @return Returns the number of times the specified character appears in the
+ * string.
  */
 int countChar(char input[], char search) {
     int count = 0;
