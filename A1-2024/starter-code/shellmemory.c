@@ -25,6 +25,8 @@ void mem_clear_value(int mem_idx);
 /**
  * This function sets up the necessary memory structures and resources required
  * for the shell's operation.
+ * @param void
+ * @return void
  */
 void mem_init() {
     // Initialize variable and code shellmemory
@@ -48,7 +50,8 @@ void mem_init() {
  * be set.
  * @param values_in An array of strings representing the values to be associated
  * with the variable.
- * @param number_values The number of values in the `values_in` array.
+ * @param number_values The number of values in the 'values_in' array.
+ * @return void
  */
 void mem_set_value(char *var_in, char *values_in[], int number_values) {
     int mem_idx, val_idx, wasSet = 0;
@@ -119,6 +122,7 @@ int mem_get_variable_index(char *var_in) {
  * @param var_in A pointer to a string representing the input key (variable
  * name).
  * @param buffer A pointer to a buffer where the retrieved value will be stored.
+ * @return void
  */
 void mem_get_value(char *var_in, char *buffer) {
     int mem_idx, val_idx;
@@ -154,6 +158,7 @@ void mem_get_value(char *var_in, char *buffer) {
  * effectively resetting it to an uninitialized state.
  *
  * @param mem_idx The memory index of the variable whose value is to be cleared.
+ * @return void
  */
 void mem_clear_value(int mem_idx) {
     int val_idx = 0;

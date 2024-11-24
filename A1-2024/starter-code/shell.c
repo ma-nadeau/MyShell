@@ -109,7 +109,7 @@ int convertInputToOneLiners(char input[]) {
  * The function takes as input a string containing the command and associated
  * arguments and it executes it.
  *
- * @param input A string containing the command and arguments.
+ * @param inp A string containing the command and arguments.
  * @return Returns 0 on success, or a non-zero value on failure.
  */
 int parseInput(char inp[]) {

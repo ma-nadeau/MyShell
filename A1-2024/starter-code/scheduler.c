@@ -38,6 +38,8 @@ void placePCBAtEndOfDLL(struct PCB *p1);
 
 /**
  * This function intializes the ready queue and associated required resources.
+ * @param void
+ * @return void
  */
 void scheduler_init() {
     // Initialize readyQueue
@@ -134,6 +136,7 @@ int mem_load_script(char script[], policy_t policy) {
  * @param policy The scheduling policy to be used.
  * @param scriptInfo The struct containing the page table associated with a
  * script
+ * @return void
  */
 void createPCB(policy_t policy, struct scriptFrames *scriptInfo) {
     struct PCB *newPCB;
@@ -195,13 +198,14 @@ void createPCB(policy_t policy, struct scriptFrames *scriptInfo) {
  *
  * @param policy The scheduling policy to determine how to insert preempted PCBs
  * back in the queue
+ * @return void
  */
 void executeReadyQueuePCBs(policy_t policy) {
     int line_idx;
     struct PCB *currentPCB;
     char *instr;
 
-next_timeslice_execute:
+next_timeslice_execute: // Label to jump to when a page fault occurs
     while ((currentPCB = popHeadFromPCBQueue())) {
         // Execute all lines of code
         for (line_idx = currentPCB->virtualAddress;
@@ -219,7 +223,7 @@ next_timeslice_execute:
                 } else {
                     insertPCBFromTailSJF(currentPCB);
                 }
-                goto next_timeslice_execute;
+                goto next_timeslice_execute; // Jump to next process
             }
         }
         terminateProcess(currentPCB);
@@ -232,13 +236,14 @@ next_timeslice_execute:
  * specified line number.
  *
  * @param lineNumber The number of line to execute before switching processes.
+ * @return void
  */
 void runRR(int lineNumber) {
     struct PCB *currentPCB;
     int line_idx, programCounterTmp;
     char *instr;
 
-next_timeslice_RR:
+next_timeslice_RR: // Label to jump to when a page fault occurs
     while ((currentPCB = popHeadFromPCBQueue())) {
         // Execute lineNumber lines of code
         programCounterTmp = currentPCB->virtualAddress;
@@ -252,7 +257,7 @@ next_timeslice_RR:
             } else {  // Fix page fault and preempt the process
                 pageAssignment(line_idx / PAGE_SIZE, currentPCB->scriptInfo, 0);
                 placePCBAtEndOfDLL(currentPCB);
-                goto next_timeslice_RR;
+                goto next_timeslice_RR; // Jump to next process
             }
         }
         // Check if process has finished running
@@ -267,6 +272,8 @@ next_timeslice_RR:
 /**
  *Executes the Aging scheduling policy.This function implements the Aging
  *scheduling algorithm for the process in the readyQueue
+ * @param void
+ * @return void
  */
 void runAging() {
     struct PCB *currentPCB, *tmp, *smallest, *currentHead;
@@ -327,6 +334,7 @@ void runAging() {
  *
  * @param policy A value of type `policy_t` that represents the scheduling
  * policy to be used. (i.e., FCFS, SJF, RR, RR30, AGING)
+ * @return void
  */
 void selectSchedule(policy_t policy) {
     switch (policy) {
@@ -353,6 +361,8 @@ void selectSchedule(policy_t policy) {
  * waiting for work to be available via condition variables. When work is
  * signaled, it selects the scheduling policy to manage process execution. The
  * loop continues until a termination signal is received.
+ * @param args A pointer to the arguments passed to the worker thread.
+ * @return void
  */
 void *workerThread(void *args) {
     int startWorkerExitProcedure = 0;
@@ -404,6 +414,7 @@ void *workerThread(void *args) {
  * should execute in the background. (1 if True, 0 if False)
  * @param isRunningConcurrently An integer flag indicating if processes should
  * run concurrently. (1 if True, 0 if False)
+ * @return void
  */
 void schedulerRun(policy_t policy, int isRunningBackground,
                   int isRunningConcurrently) {
@@ -464,7 +475,7 @@ void schedulerRun(policy_t policy, int isRunningBackground,
  * a termination flag and signals the worker threads to exit. It then calls
  * 'pthread_join' for each thread, ensuring the main thread waits for their
  * completion before proceeding.
- *
+ * @param void
  * @return void
  */
 void joinAllThreads() {
@@ -504,6 +515,7 @@ int isMainThread(pthread_t runningPthread) {
  *
  * @param pcb A pointer to the PCB structure representing the process to be
  * added to the queue.
+ * @return void
  */
 void insertPCBFromTailSJF(struct PCB *pcb) {
     struct PCB *currentPCB;
@@ -556,7 +568,6 @@ void insertPCBFromTailSJF(struct PCB *pcb) {
  * ready queue and reattaches the previous and next nodes (if any) together.
  *
  * @param pcb A pointer to the PCB to be removed from the queue.
- *
  * @return void
  */
 void detachPCBFromQueue(struct PCB *pcb) {
@@ -591,7 +602,8 @@ void detachPCBFromQueue(struct PCB *pcb) {
 /**
  * This function retrieves and removes the first PCB from the PCB queue.
  * If the queue is empty, it returns NULL.
- *
+ * 
+ * @param void
  * @return A pointer to the PCB that was removed from the head of the queue,
  *         or NULL if the queue is empty.
  */
@@ -616,6 +628,7 @@ struct PCB *popHeadFromPCBQueue() {
  *
  * @param pcb A pointer to the PCB structure to be placed at the end of the
  * linked list.
+ * @return void
  */
 void placePCBAtEndOfDLL(struct PCB *pcb) {
     pthread_mutex_lock(&readyQueueLock);

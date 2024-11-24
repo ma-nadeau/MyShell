@@ -145,7 +145,7 @@ int interpreter(char *command_args[], int args_size) {
  * Function implementing the help command
  * which prints the list of commands available to the user
  * that the shell provides.
- *
+ * @param void
  * @return Returns an integer indicating success (0)
  */
 int help() {
@@ -165,7 +165,7 @@ run SCRIPT.TXT		Executes the file SCRIPT.TXT\n ";
  * Note that depending on whether a worker thread or the main thread is calling
  * quit the behaviour differs. Worker threads can only signal the main thread to
  * exit while the main shell immediately starts the exit procedure.
- *
+ * @param void
  * @return Returns an integer indicating success (0)
  */
 int quit() {
@@ -262,6 +262,7 @@ int echo(char *input) {
  * Function implementing the ls command
  * which lists the directories and files in the cd.
  *
+ * @param void
  * @return Returns an integer indicating success (0) or non-zero on failure
  */
 int my_ls() {

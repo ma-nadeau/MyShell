@@ -26,6 +26,8 @@ void updateLRURanking(int frameMostRecentlyUsed);
 /**
  * This function intializes the memory for the scripts as well as
  * resources required for script memory management.
+ * @param void
+ * @return void
  */
 void scripts_memory_init() {
     // Initialize variable and code shellmemory
@@ -81,7 +83,9 @@ char *fetchInstructionVirtual(int instructionVirtualAddress, struct scriptFrames
  * instruction stored
  * @param scriptInfo the struct containing the page table needed to decode the
  * virtual address
- * @param newInstruction the new instruction to assign
+ * @param newInstruction the new instruction to assign to the virtual address
+ * 
+ * @return void
  */
 void updateInstructionVirtual(int instructionVirtualAddress,
                               struct scriptFrames *scriptInfo,
@@ -95,7 +99,7 @@ void updateInstructionVirtual(int instructionVirtualAddress,
 
 /**
  * Function that returns the LRU (Least Recently Used) frame to be replaced
- *
+ * @param void
  * @return the LRU frame index
  */
 int findLRUFrame() {
@@ -115,7 +119,10 @@ int findLRUFrame() {
  * Function that declares the victime page in stdout and simultaneously frees
  * the lines occupied
  *
- * @param victimPage
+ * @param victimPage the page number of the victim page 
+ * @param scriptInfo the struct containing the page table of the victim page
+ * 
+ * @return void
  */
 void declareVictimePage(int victimePage, struct scriptFrames *scriptInfo) {
     int pageOffset;
@@ -146,6 +153,8 @@ void declareVictimePage(int victimePage, struct scriptFrames *scriptInfo) {
  * @param scriptInfo struct containing page table fo the page to be stored
  * @param setup boolean that is True if the script is being allocated its first
  * 2 frames or False if it is a page fault
+ * 
+ * @return void
  */
 void pageAssignment(int pageNumber, struct scriptFrames *scriptInfo, int setup) {
     FILE *p;
@@ -216,9 +225,9 @@ void pageAssignment(int pageNumber, struct scriptFrames *scriptInfo, int setup) 
  * This function is important for code sharing between process executing the
  * same script
  *
- * @param script path name of the script to find the page table of
+ * @param script path name of the script to find the page table of in memory
  *
- * @return scriptFrames page table struct of the script in question
+ * @return scriptFrames page table struct of the script in question or NULL if the script is not in memory
  */
 struct scriptFrames *findExistingScript(char script[]) {
     int frameIdx;
@@ -243,8 +252,9 @@ struct scriptFrames *findExistingScript(char script[]) {
  * Function that translates virtual addresses to physical addresses given a page
  * table
  *
- * @param instructionVirtualAddress the virtual address to translate
- * @param scriptInfo the struct containing the page table
+ * @param instructionVirtualAddress the virtual address to translate to physical address
+ * @param scriptInfo the struct containing the page table needed to decode the
+ * virtual address
  *
  * @return the physical address if a valid mapping is available and -1 if the
  * virtual address is invalid
@@ -267,7 +277,9 @@ int virtualToPhysicalAddress(int instructionVirtualAddress, struct scriptFrames 
  * Function that updates the LRU ranking by designating a new most recently
  * accessed frame
  *
- * @param frameMostRecentlyUsed the new frame with LRU rank '0'
+ * @param frameMostRecentlyUsed the new frame with LRU rank '0' to be updated in the ranking
+ * 
+ * @return void
  */
 void updateLRURanking(int frameMostRecentlyUsed) {
     int frameIdx, oldRank;
