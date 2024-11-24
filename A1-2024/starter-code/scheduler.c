@@ -119,7 +119,7 @@ int mem_load_script(char script[], policy_t policy) {
     }
 
     // Assign the first few pages of the script to frames
-    for (pageIdx = 0; pageIdx < PAGES_LOADED_NUMBER; pageIdx++) {
+    for (pageIdx = 0; pageIdx < PAGES_LOADED_NUMBER && pageIdx < scriptLength/PAGE_SIZE+1; pageIdx++) {
         pageAssignment(pageIdx, scriptInfo, 1);
     }
 
