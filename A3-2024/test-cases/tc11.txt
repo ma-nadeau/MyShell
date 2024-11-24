@@ -1,0 +1,1 @@
+exec prog12 prog12 prog12 RR
